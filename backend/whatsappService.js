@@ -226,14 +226,7 @@ class WhatsAppService {
         },
         printQRInTerminal: false,
         browser: Browsers.macOS('Chrome'),
-        markOnlineOnConnect: true,
-        syncFullHistory: false,
-        defaultQueryTimeoutMs: 20000,
-        connectTimeoutMs: 40000,
-        retryRequestDelayMs: 250,
-        maxMsgRetryCount: 5,
-        fireInitQueries: false,
-        shouldSyncHistoryMessage: () => false
+        markOnlineOnConnect: true
       });
 
       this.sock.ev.on('creds.update', saveCreds);
