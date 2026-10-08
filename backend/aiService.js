@@ -48,7 +48,7 @@ class AIService {
   }
 
   /**
-   * Google Gemini API Direct Caller (Supporting gemini-3.5-flash, gemini-3.5-flash-lite, gemini-3.1-flash-lite)
+   * Google Gemini API Direct Caller (Supporting gemini-1.5-flash, gemini-2.0-flash, gemini-1.5-pro)
    */
   async callGemini(apiKey, systemInstruction, history = [], userPrompt = '', isJson = false, imageBuffer = null, imageMime = 'image/jpeg') {
     if (!apiKey) return null;
@@ -78,9 +78,9 @@ class AIService {
     });
 
     const modelsToTry = [
-      'gemini-3.5-flash',
       'gemini-3.5-flash-lite',
-      'gemini-3.8-flash'
+      'gemini-flash-lite-latest',
+      'gemini-flash-latest'
     ];
 
     for (const model of modelsToTry) {
@@ -90,7 +90,7 @@ class AIService {
           system_instruction: { parts: [{ text: systemInstruction }] },
           contents: contents,
           generationConfig: {
-            maxOutputTokens: 650,
+            maxOutputTokens: 800,
             temperature: 0.3,
             responseMimeType: isJson ? 'application/json' : undefined
           }
@@ -138,7 +138,7 @@ class AIService {
     // 2. Fallback to Gemini Multimodal Audio
     const geminiKey = settings.geminiApiKey || process.env.GEMINI_API_KEY;
     if (geminiKey && audioBuffer) {
-      const modelsToTry = ['gemini-3.5-flash', 'gemini-3.5-flash-lite'];
+      const modelsToTry = ['gemini-3.5-flash-lite', 'gemini-flash-lite-latest'];
       for (const model of modelsToTry) {
         try {
           const base64Audio = Buffer.isBuffer(audioBuffer) ? audioBuffer.toString('base64') : audioBuffer;
@@ -198,62 +198,54 @@ class AIService {
 ${settings.knowledgeBase || ''}
 
 🎯 কঠোর নিয়মাবলী (Human-Like Rules):
-১. চ্যাট হিস্ট্রি (Conversation History) গভীর মনোযোগ দিয়ে বুঝবে:
-   - কাস্টমার আগে কী জানতে চেয়েছেন এবং তুমি আগে কী উত্তর দিয়েছ তা মনে রাখবে।
-   - চলমান কথোপকথন থাকলে বারবার "আসসালামু আলাইকুম" বা ওয়েলকাম ভূমিকা দেবে না! সরাসরি কাস্টমারের প্রশ্নের জবাব দেবে।
-   - কাস্টমার যদি আগের কথার সূত্র ধরে প্রশ্ন করে (যেমন: "এটার সাথে ডোমেইন পাবো?", "ডেমো লিংকটা দেন", "কতদিন লাগবে?"), বুঝবে সে কোন সার্ভিস নিয়ে কথা বলছিল এবং সেই অনুযায়ী সঠিক তথ্য দেবে।
-   - অপ্রাসঙ্গিক লম্বা লেকচার দেবে না। স্বাভাবিক মানুষের মতো সংক্ষিপ্ত (১-৩ বাক্য) কিন্তু পূর্ণাঙ্গ তথ্যবহুল উত্তর দেবে।
+১. শুভেচ্ছা বার্তা (Greetings):
+   - কাস্টমার যদি কেবল "Hi", "Hello", "Assalamu Alaikum", "hlw" ইত্যাদি বলে, তবে তাকে মিষ্টি করে আন্তরিক শুভেচ্ছা জানাও।
+   - যেমন: "আসসালামু আলাইকুম ${customerDisplayName} ভাই! ${businessName}-এ আপনাকে স্বাগতম। বলুন আপনাকে কীভাবে সাহায্য করতে পারি?"
+২. তথ্য প্রদান (Precise Information):
+   - কাস্টমার যা জানতে চাইবে কেবল তার সঠিক তথ্য দাও (ওয়ার্ডপ্রেস ল্যান্ডিং পেজ মাত্র ১,৪৯৯ টাকা, কমপ্লিট ই-কমার্স ৩,৫০০ টাকা, বুস্টিং ১ ডলার ১৪৫ টাকা ইত্যাদি)।
+   - অতিরিক্ত অপ্রাসঙ্গিক কথা বলবে না। ১-৩ লাইনে স্পষ্ট উত্তর দাও।
+৩. প্যাকেজ ইমেজ ট্যাগিং (imageCategory):
+   - কাস্টমার যদি হোস্টিং সম্পর্কে জানতে চায়, "imageCategory": "hosting" দাও।
+   - কাস্টমার যদি ওয়েবসাইট/ই-কমার্স/ল্যান্ডিং পেজ সম্পর্কে জানতে চায়, "imageCategory": "website" দাও।
+৪. কাস্টমার যদি অর্ডার করতে চায়:
+   - নাম, ফোন নম্বর, ইমেইল ও পেজের নাম চেয়ে নাও এবং "isOrderConfirmed": true দাও।
+৫. পেমেন্ট স্ক্রিনশট আসলে:
+   - অ্যামাউন্ট ও ট্রানজেকশন আইডি চিহ্নিত করে "isPaymentScreenshot": true এবং "paymentAmount" উল্লেখ করো।
 
-২. আমাদের মূল সার্ভিস ও প্রাইসিং গাইডলাইন:
-   - ল্যান্ডিং পেজ: মাত্র ১,৪৯৯ টাকা (লাইফটাইম বিজনেস অটোমেশন, অর্ডার ম্যানেজমেন্ট, কুরিয়ার ইন্টিগ্রেশন, পিক্সেল ট্র্যাকিং + ১ বছরের .SHOP ডোমেইন ও ১ম মাসের হোস্টিং ফ্রি)। ডেমো: landing.sohagonline.com
-   - কমপ্লিট ই-কমার্স ওয়েবসাইট + আনলিমিটেড ল্যান্ডিং পেজ: মাত্র ৩,৫০০ টাকা (লারাভেল + রিঅ্যাক্ট + নেক্সট জেএস, সুপার ফাস্ট, আনলিমিটেড ল্যান্ডিং পেজ তৈরির সুবিধা, এডমিন ডেমো: sohagonline.cloud/admin, ইউজার: demo@gmail.com, পাস: demo@gmail.com)। ডেমো: sohagonline.cloud
-   - ফেসবুক বুস্টিং: ডলার রেট $1 = ১৪৫ টাকা, প্রতিদিন সর্বনিম্ন $2 বাজেট থেকে শুরু। আমাদের পেজে ফ্রেন্ড রিকোয়েস্ট ও এক্সেস দিন (facebook.com/sohag0006) এবং ফর্ম পূরণ করুন (billing.sohagonline.com/boosting)।
-   - ডোমেন ও হোস্টিং রিনিউ: ১ম মাস ফ্রি এর পর প্রতি মাসে মাত্র ২০০ টাকা। নিজস্ব ডোমেন/হোস্টিং থাকলে লাইফটাইম ফ্রি (কোনো মাসিক চার্জ নেই)।
-   - পেমেন্ট নম্বর (Send Money): বিকাশ: 01953334002 | রকেট: 019533340027 | নগদ/সেলফিন: 01518393559 | QR: billing.sohagonline.com/pay?method=qr
-
-৩. কাস্টমার যদি ছবি/স্ক্রিনশট পাঠায়:
-   - পেমেন্ট স্লিপ হলে টাকা ও TrxID শনাক্ত করে "isPaymentScreenshot": true দেবে এবং সুন্দরভাবে ধন্যবাদ জানিয়ে ওয়েবসাইটের তথ্য চাইবে।
-   - ওয়েবসাইট রেফারেন্স পাঠালে বলবে যে আমরা ঠিক এরকম আকর্ষণীয় ডিজাইন করে দিতে পারবো।
-
-৪. কাস্টমার যদি ফোনে কথা বলতে বা কল দিতে বলে:
-   - "wantsCall": true সেট করবে এবং আশ্বস্ত করবে যে প্রতিনিধি দ্রুত কল দিচ্ছেন।
-
-৫. উত্তরের ভাষা ও টোন:
-   - মিষ্টি, আন্তরিক ও প্রমিত বাংলাদেশি বাংলা ভাষা। কাস্টমার বাংলিশে লিখলেও তুমি সুন্দর সহজ বাংলায় উত্তর দেবে।
-   - উত্তরের শেষে আলোচনাকে এগিয়ে নেওয়ার জন্য একটি স্বাভাবিক প্রশ্ন করবে।
-
-আউটপুট অবশ্যই ভ্যালিড JSON ফরমেটে দেবে:
+Output MUST be a single valid JSON object strictly matching this schema:
 {
-  "replyText": "কাস্টমারের বর্তমান বার্তার সরাসরি ও প্রাসঙ্গিক মানুষের মতো উত্তর",
+  "replyText": "কাস্টমারের উদ্দেশ্যে তোমার মিষ্টি ও নির্ভুল বাংলা মেসেজ",
   "imageCategory": "hosting" | "website" | null,
-  "wantsCall": boolean,
   "temperature": "hot" | "warm" | "cold",
-  "score": number,
-  "isOrderConfirmed": boolean,
-  "isSupportIssue": boolean,
-  "isPaymentScreenshot": boolean,
-  "paymentAmount": number,
-  "trxId": string,
-  "customerName": string,
-  "customerPhone": string,
-  "customerEmail": string,
-  "pageName": string,
-  "packageItem": string,
-  "estimatedAmount": number
-}`;
+  "score": 85,
+  "needsCatalog": false,
+  "wantsCall": false,
+  "isOrderConfirmed": false,
+  "isPaymentScreenshot": false,
+  "paymentAmount": null,
+  "trxId": null,
+  "isSupportIssue": false,
+  "customerName": "${customerDisplayName}",
+  "customerPhone": "${lead.realPhone || lead.phone}",
+  "customerEmail": null,
+  "pageName": null,
+  "packageItem": null,
+  "estimatedAmount": null
+} `;
 
-    // Ensure we pass last 15 conversation turns
-    const formattedHistory = historyList.slice(-15);
+    const formattedHistory = historyList.map(h => ({
+      role: h.role,
+      parts: [{ text: h.content }]
+    }));
 
-    // Avoid duplicating the current user message at the tail
-    if (formattedHistory.length > 0 && formattedHistory[formattedHistory.length - 1].role === 'user' && formattedHistory[formattedHistory.length - 1].content.trim() === userMessage.trim()) {
+    if (formattedHistory.length > 0 && formattedHistory[formattedHistory.length - 1].role === 'user') {
       formattedHistory.pop();
     }
 
     let parsedResult = null;
     const geminiKey = settings.geminiApiKey || process.env.GEMINI_API_KEY;
 
-    // 1. Primary AI Engine: Google Gemini 3.5 Flash (Superior Multimodal Reasoning)
+    // 1. Primary AI Engine: Google Gemini (Superior Multimodal Reasoning)
     if (geminiKey) {
       try {
         const jsonStr = await this.callGemini(
@@ -270,7 +262,7 @@ ${settings.knowledgeBase || ''}
           parsedResult = JSON.parse(clean);
         }
       } catch (geminiErr) {
-        console.warn('Gemini Generation Warning, falling back to secondary AI:', geminiErr.message);
+        console.warn('Gemini Generation Warning, falling back to Groq AI:', geminiErr.message);
       }
     }
 
@@ -278,7 +270,7 @@ ${settings.knowledgeBase || ''}
     if (!parsedResult && !imageBuffer && this.groq) {
       const groqHistory = formattedHistory.map(h => ({
         role: h.role === 'model' ? 'assistant' : 'user',
-        content: h.content
+        content: h.parts?.[0]?.text || h.content || ''
       }));
 
       const groqModels = ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b', 'openai/gpt-oss-20b'];
@@ -336,9 +328,9 @@ ${settings.knowledgeBase || ''}
     // Humanized Fallback (Zero robotic responses)
     if (!replyText) {
       if (wantsCall) {
-        replyText = `জ্বি ${customerDisplayName} ভাই, আমি বিষয়টি নোট করে নিয়েছি। কিছুক্ষণের মধ্যেই আমাদের প্রতিনিধি আপনাকে ফোনে কল দিয়ে বিস্তারিত জানিয়ে দেবেন।`;
+        replyText = `জ্বি ${customerDisplayName} ভাই, আমি বিষয়টি নোট করে নিয়েছি। কিছুক্ষণের মধ্যেই আমাদের প্রতিনিধি আপনাকে হোয়াটসঅ্যাপে যোগাযোগ করবেন।`;
       } else if (hasPriorDialogue || isExisting) {
-        replyText = `জ্বি ${customerDisplayName} ভাই, আপনার মেসেজটি বুঝতে পেরেছি। বলুন আপনাকে আর কীভাবে সাহায্য করতে পারি?`;
+        replyText = `জ্বি ${customerDisplayName} ভাই, আপনার মেসেজটি পেয়েছি। বলুন আপনাকে আর কীভাবে সাহায্য করতে পারি?`;
       } else {
         replyText = `আসসালামু আলাইকুম ${customerDisplayName} ভাই! ${businessName}-এ আপনাকে স্বাগতম। আমাদের ল্যান্ডিং পেজ, ওয়েবসাইট ডেভেলপমেন্ট বা ডিজিটাল মার্কেটিং সার্ভিস সম্পর্কে কীভাবে সাহায্য করতে পারি বলুন?`;
       }
@@ -389,7 +381,7 @@ ${settings.knowledgeBase || ''}
             ...conversationHistory,
             { role: 'user', content: userSpeech }
           ],
-          model: 'qwen/qwen3.8-27b',
+          model: 'llama-3.3-70b-versatile',
           temperature: 0.35,
           max_tokens: 180
         });
@@ -409,7 +401,7 @@ ${settings.knowledgeBase || ''}
 
     if (geminiKey) {
       try {
-        const prompt = `Analyze this Bengali customer phone call transcript: "${transcript}".
+        const prompt = `Analyze this Bengali customer call transcript: "${transcript}".
 Return a JSON with "summary" (1-2 sentence Bengali), "interestLevel" (interested/not_interested/call_later/unclear), "notes".`;
         const res = await this.callGemini(geminiKey, "You are an analytical assistant. Output valid JSON only.", [], prompt, true);
         const clean = res.replace(/```json|```/g, '').trim();
@@ -437,7 +429,7 @@ Return a JSON with "summary" (1-2 sentence Bengali), "interestLevel" (interested
       return `ধন্যবাদ ${customerName}! আমাদের সাথে কথা বলার জন্য। ভবিষ্যতে যেকোনো প্রয়োজনে আমরা আপনার পাশে আছি। — ${settings.businessName}`;
     }
 
-    return `আসসালামু আলাইকুম ${customerName}! আপনার সাথে মাত্রই ফোনে কথা হলো।
+    return `আসসালামু আলাইকুম ${customerName}! আপনার সাথে মাত্রই আলোচনা হলো।
     
 📋 *আমাদের আলোচনার সারসংক্ষেপ:*
 ${callSummary}

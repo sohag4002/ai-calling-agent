@@ -358,6 +358,24 @@ app.post('/api/whatsapp/clear-session', async (req, res) => {
   }
 });
 
+app.post('/api/ai/test-chat', async (req, res) => {
+  try {
+    const { query, name } = req.body;
+    if (!query) {
+      return res.status(400).json({ error: 'Query text is required' });
+    }
+    const lead = {
+      name: name || 'সম্মানিত কাস্টমার',
+      phone: '01700000000',
+      realPhone: '01700000000'
+    };
+    const reply = await aiService.generateWhatsAppReply(lead, [], query);
+    res.json({ success: true, reply });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Start Express Server & WhatsApp Web Socket
 server.listen(PORT, () => {
   console.log(`\n======================================================`);

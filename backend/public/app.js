@@ -192,8 +192,9 @@ function updateWhatsAppUI(status, qr) {
   }
 }
 
-// Update Gateways UI
+// Update Gateways UI (if element exists)
 function updateGatewaysUI(gateways) {
+  if (!noGateway || !gatewayList || !gatewayBadge) return;
   if (!gateways || gateways.length === 0) {
     noGateway.classList.remove('hidden');
     gatewayList.classList.add('hidden');
@@ -714,23 +715,53 @@ async function triggerDirectCall(phone, name) {
 }
 
 // Modal Handlers
-function openTestCallModal() {
-  document.getElementById('test-call-modal').classList.remove('hidden');
+function openTestChatModal() {
+  const modal = document.getElementById('test-chat-modal');
+  if (modal) modal.classList.remove('hidden');
 }
 
-function closeTestCallModal() {
-  document.getElementById('test-call-modal').classList.add('hidden');
+function closeTestChatModal() {
+  const modal = document.getElementById('test-chat-modal');
+  if (modal) modal.classList.add('hidden');
 }
 
-async function submitTestCall() {
-  const name = document.getElementById('test-name').value;
-  const phone = document.getElementById('test-phone').value;
-  if (!phone) {
-    alert('অনুগ্রহ করে ফোন নম্বরটি লিখুন!');
+async function submitTestChat() {
+  const query = document.getElementById('test-chat-query')?.value?.trim();
+  const name = document.getElementById('test-chat-name')?.value?.trim() || 'রহিম ভাই';
+  if (!query) {
+    showToast('⚠️ অনুগ্রহ করে একটি প্রশ্ন বা মেসেজ লিখুন!');
     return;
   }
-  await triggerDirectCall(phone, name);
-  closeTestCallModal();
+
+  const btn = document.getElementById('test-chat-btn');
+  const resultBox = document.getElementById('test-chat-result-box');
+  const replyText = document.getElementById('test-chat-reply-text');
+  const metaBox = document.getElementById('test-chat-meta');
+
+  if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> AI ভাবছে...';
+  if (resultBox) resultBox.classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/ai/test-chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, name })
+    });
+    const data = await res.json();
+    if (data.success && data.reply) {
+      if (replyText) replyText.textContent = data.reply.replyText || 'উত্তর পাওয়া যায়নি';
+      if (metaBox) {
+        metaBox.innerHTML = `🔥 টেম্পারেচার: <b>${data.reply.temperature}</b> | 🎯 লিড স্কোর: <b>${data.reply.score}/100</b> ${data.reply.imageCategory ? `| 📸 প্যাকেজ ছবি: <b>${data.reply.imageCategory}</b>` : ''}`;
+      }
+      if (resultBox) resultBox.classList.remove('hidden');
+    } else {
+      showToast('❌ এরর: ' + (data.error || 'AI উত্তর তৈরি করতে পারেনি'));
+    }
+  } catch (err) {
+    showToast('❌ সার্ভার কানেকশন এরর!');
+  } finally {
+    if (btn) btn.innerHTML = '<i class="fa-solid fa-bolt"></i> টেস্ট উত্তর দেখুন';
+  }
 }
 
 async function restartWhatsApp() {

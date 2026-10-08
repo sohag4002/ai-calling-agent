@@ -70,8 +70,8 @@
             </button>
           </div>
 
-          <button class="btn btn-primary" onclick="openTestCallModal()">
-            <i class="fa-solid fa-phone-flip"></i> টেস্ট কল করুন
+          <button class="btn btn-primary" onclick="openTestChatModal()">
+            <i class="fa-solid fa-robot"></i> টেস্ট AI চ্যাট সিমুলেটর
           </button>
         </div>
       </header>
@@ -161,24 +161,60 @@
             </div>
           </div>
 
-          <!-- Android Gateway Card -->
+          <!-- AI Engine & Voice Note Processing Card -->
           <div class="glass-card">
             <div class="card-header">
               <div class="card-title-group">
-                <i class="fa-solid fa-mobile-screen-button text-indigo text-xl"></i>
-                <h3>অ্যান্ড্রয়েড ফোন গেটওয়ে (SIM Caller)</h3>
+                <i class="fa-solid fa-microchip text-indigo text-xl"></i>
+                <h3>AI ব্রেন ও অটো-অ্যাটেন্ড্যান্ট (24/7 Engine)</h3>
               </div>
-              <span id="gateway-badge" class="badge badge-outline">চেক করা হচ্ছে...</span>
+              <span class="badge badge-success">সক্রিয় ও প্রস্তুত</span>
             </div>
             <div class="card-body">
-              <div id="no-gateway" class="empty-state-box">
-                <i class="fa-solid fa-tower-broadcast text-rose text-3xl mb-2"></i>
-                <h4>কোনো অ্যান্ড্রয়েড ফোন কানেক্টেড নেই</h4>
-                <p>আপনার মোবাইল অ্যাপে সার্ভার URL দিয়ে কানেক্ট করুন।</p>
-              </div>
+              <div style="display: flex; flex-direction: column; gap: 12px; padding: 4px 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <i class="fa-solid fa-brain text-emerald"></i>
+                    <div>
+                      <h4 style="font-size: 13px; margin: 0;">Google Gemini 3.5 & Flash</h4>
+                      <p style="font-size: 11px; color: var(--text-secondary); margin: 0;">প্রমিত বাংলা কথোপকথন ও ভিশন অ্যানালাইসিস</p>
+                    </div>
+                  </div>
+                  <span class="badge badge-success" style="font-size: 11px;">কানেক্টেড</span>
+                </div>
 
-              <div id="gateway-list" class="gateway-list hidden">
-                <!-- Connected Phones -->
+                <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <i class="fa-solid fa-bolt text-amber"></i>
+                    <div>
+                      <h4 style="font-size: 13px; margin: 0;">Groq GPT-OSS & Qwen Engine</h4>
+                      <p style="font-size: 11px; color: var(--text-secondary); margin: 0;">হাই-স্পিড ব্যাকআপ এআই রেসপন্ডার</p>
+                    </div>
+                  </div>
+                  <span class="badge badge-success" style="font-size: 11px;">কানেক্টেড</span>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <i class="fa-solid fa-microphone-lines text-indigo"></i>
+                    <div>
+                      <h4 style="font-size: 13px; margin: 0;">Groq Whisper Audio Transcriber</h4>
+                      <p style="font-size: 11px; color: var(--text-secondary); margin: 0;">হোয়াটসঅ্যাপ অডিও/ভয়েস নোট ট্রান্সক্রিপশন</p>
+                    </div>
+                  </div>
+                  <span class="badge badge-success" style="font-size: 11px;">সক্রিয়</span>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <i class="fa-solid fa-phone-slash text-rose"></i>
+                    <div>
+                      <h4 style="font-size: 13px; margin: 0;">ইনকামিং হোয়াটসঅ্যাপ কল হ্যান্ডলার</h4>
+                      <p style="font-size: 11px; color: var(--text-secondary); margin: 0;">কল আসলে ভদ্রভাবে স্বয়ংক্রিয় ভয়েস/টেক্সট নির্দেশ পাঠায়</p>
+                    </div>
+                  </div>
+                  <span class="badge badge-success" style="font-size: 11px;">সক্রিয়</span>
+                </div>
               </div>
             </div>
           </div>
@@ -494,28 +530,33 @@
     </div>
   </div>
 
-  <!-- Test Call Modal -->
-  <div id="test-call-modal" class="modal-backdrop hidden">
+  <!-- Test AI Chat Simulator Modal -->
+  <div id="test-chat-modal" class="modal-backdrop hidden">
     <div class="modal-box">
       <div class="modal-header">
-        <h3><i class="fa-solid fa-phone text-indigo"></i> সরাসরি টেস্ট কল করুন</h3>
-        <button class="close-btn" onclick="closeTestCallModal()">&times;</button>
+        <h3><i class="fa-solid fa-robot text-indigo"></i> টেস্ট AI রেসপন্স সিমুলেটর</h3>
+        <button class="close-btn" onclick="closeTestChatModal()">&times;</button>
       </div>
       <div class="modal-body">
-        <p class="mb-4">একটি বাংলাদেশি ফোন নম্বর লিখুন। আপনার কানেক্টেড অ্যান্ড্রয়েড ফোন দিয়ে সাথে সাথে AI কল ডায়াল হবে।</p>
+        <p class="mb-4">একটি ডেমো কাস্টমার মেসেজ লিখে টেস্ট করুন AI কীভাবে বুদ্ধিমান ও প্রমিত বাংলায় উত্তর প্রদান করছে:</p>
         <div class="form-group">
-          <label>কাস্টমারের নাম</label>
-          <input type="text" id="test-name" class="form-control" placeholder="যেমন: তানভীর ভাই">
+          <label>কাস্টমারের নাম (ঐচ্ছিক)</label>
+          <input type="text" id="test-chat-name" class="form-control" placeholder="যেমন: রহিম ভাই" value="রহিম ভাই">
         </div>
         <div class="form-group">
-          <label>ফোন নম্বর (১১ ডিজিট)</label>
-          <input type="text" id="test-phone" class="form-control" placeholder="01XXXXXXXXX">
+          <label>কাস্টমারের মেসেজ (Customer Query)</label>
+          <textarea id="test-chat-query" rows="3" class="form-control" placeholder="যেমন: আপনাদের ওয়ার্ডপ্রেস ল্যান্ডিং পেজ আর ই-কমার্স প্যাকেজের প্রাইস কত?"></textarea>
+        </div>
+        <div id="test-chat-result-box" class="hidden" style="margin-top: 15px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; padding: 12px;">
+          <h4 style="color: #34d399; font-size: 13px; margin-bottom: 6px;"><i class="fa-solid fa-reply"></i> AI তাৎক্ষণিক রেসপন্স:</h4>
+          <p id="test-chat-reply-text" style="font-size: 14px; line-height: 1.6; color: #fff; margin: 0; white-space: pre-wrap;"></p>
+          <div id="test-chat-meta" style="margin-top: 8px; font-size: 11px; color: var(--text-secondary);"></div>
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-outline" onclick="closeTestCallModal()">বাতিল</button>
-        <button class="btn btn-primary" onclick="submitTestCall()">
-          <i class="fa-solid fa-paper-plane"></i> কল পাঠান
+        <button class="btn btn-outline" onclick="closeTestChatModal()">বন্ধ করুন</button>
+        <button class="btn btn-primary" id="test-chat-btn" onclick="submitTestChat()">
+          <i class="fa-solid fa-bolt"></i> টেস্ট উত্তর দেখুন
         </button>
       </div>
     </div>

@@ -410,6 +410,57 @@ class WhatsAppService {
         }
       });
 
+      // Listen for incoming WhatsApp Calls
+      this.sock.ev.on('call', async (calls) => {
+        if (!calls || !Array.isArray(calls)) return;
+        for (const call of calls) {
+          if (call.status === 'offer') {
+            console.log(`📞 Incoming WhatsApp Call from ${call.from} (Call ID: ${call.id})`);
+            
+            // Reject call gracefully because WhatsApp Web protocol cannot stream 2-way WebRTC audio
+            try {
+              if (this.sock.rejectCall) {
+                await this.sock.rejectCall(call.id, call.from);
+              }
+            } catch (rejErr) {
+              console.warn('Call reject note:', rejErr.message);
+            }
+
+            const callerJid = call.from;
+            let pNum = callerJid.replace('@s.whatsapp.net', '');
+            if (pNum.startsWith('880')) pNum = '0' + pNum.substring(3);
+
+            const settings = db.getSettings();
+            const businessName = settings.businessName || 'Sohag Online';
+            const callResponseText = `আসসালামু আলাইকুম! ${businessName}-এ আপনাকে স্বাগতম।
+
+এই মুহূর্তে আমাদের লাইভ ভয়েস কলিং সাপোর্ট অটোমেটেড রয়েছে। আপনার যেকোনো তথ্য বা প্রশ্ন জানতে অনুগ্রহ করে এখানে সরাসরি একটি *ভয়েস মেসেজ (🎙️ Voice Note)* অথবা *টেক্সট* পাঠিয়ে দিন।
+
+আমাদের AI কনসালট্যান্ট সঙ্গে সঙ্গে আপনার প্রশ্নের উত্তর দিয়ে সাহায্য করবে। ধন্যবাদ! 🙏`;
+
+            try {
+              await this.sock.sendMessage(callerJid, { text: callResponseText });
+              db.appendChatMessage(pNum, 'assistant', callResponseText);
+              if (this.io) {
+                this.io.emit('chat_message', { phone: pNum, role: 'assistant', text: callResponseText, name: 'AI Assistant' });
+              }
+            } catch (err) {
+              console.warn('Failed to send call rejection reply:', err.message);
+            }
+
+            // Record lead
+            const callLead = db.addLead({
+              name: 'WhatsApp Caller',
+              phone: pNum,
+              lastMessage: '📞 মিসড / ইনকামিং হোয়াটসঅ্যাপ কল'
+            });
+            if (this.io) {
+              this.io.emit('new_lead', callLead);
+            }
+          }
+        }
+      });
+
     } catch (err) {
       console.error('Failed to start WhatsApp socket:', err);
       this.isStarting = false;
