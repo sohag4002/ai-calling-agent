@@ -114,16 +114,19 @@ io.on('connection', (socket) => {
   socket.emit('gateways_update', Array.from(connectedGateways.values()));
 
   // Android Gateway Registration
-  socket.on('register_gateway', (deviceData) => {
+  const handleGatewayReg = (deviceData = {}) => {
     connectedGateways.set(socket.id, {
       socketId: socket.id,
       deviceName: deviceData.deviceName || 'Android SIM Phone',
       simSlot: deviceData.simSlot || 1,
       connectedAt: new Date().toISOString()
     });
-    console.log(`📱 Android Gateway Registered: ${deviceData.deviceName} (Total: ${connectedGateways.size})`);
+    console.log(`📱 Android Gateway Registered: ${deviceData.deviceName || 'Android SIM Phone'} (Total: ${connectedGateways.size})`);
     io.emit('gateways_update', Array.from(connectedGateways.values()));
-  });
+  };
+
+  socket.on('register_gateway', handleGatewayReg);
+  socket.on('register_android_gateway', handleGatewayReg);
 
   // Android Gateway Dialog Bridge (Live Voice Conversation)
   socket.on('process_speech', async (data) => {

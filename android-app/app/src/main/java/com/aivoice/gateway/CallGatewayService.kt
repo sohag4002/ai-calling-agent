@@ -114,6 +114,7 @@ class CallGatewayService : Service() {
                     put("deviceName", Build.MODEL)
                 }
                 socket?.emit("register_android_gateway", registerData)
+                socket?.emit("register_gateway", registerData)
             }
 
             socket?.on(Socket.EVENT_CONNECT_ERROR) { args ->
@@ -123,7 +124,7 @@ class CallGatewayService : Service() {
                 updateNotification("সার্ভার কানেকশন চেষ্টা চলছে...")
             }
 
-            socket?.on("dial_lead") { args ->
+            val handleDial = { args: Array<Any> ->
                 if (args.isNotEmpty() && args[0] is JSONObject) {
                     val data = args[0] as JSONObject
                     val leadId = data.optString("leadId")
@@ -135,6 +136,9 @@ class CallGatewayService : Service() {
                     handleIncomingDialRequest(leadId, phone, name, openingSpeech)
                 }
             }
+
+            socket?.on("dial_lead") { args -> handleDial(args) }
+            socket?.on("dial_call") { args -> handleDial(args) }
 
             socket?.on("ai_speech_reply") { args ->
                 if (args.isNotEmpty() && args[0] is JSONObject) {
