@@ -264,7 +264,7 @@ class WhatsAppService {
       }
 
       const customPino = pino({ level: 'warn' });
-      this.signalKeyStore = makeCacheableSignalKeyStore(state.keys, customPino);
+      this.signalKeyStore = createAutoHealingSignalKeyStore(state.keys, authPath);
 
       this.sock = makeWASocket({
         version,
@@ -286,15 +286,15 @@ class WhatsAppService {
               }
             }
           }
-          // Returning undefined is required for Signal protocol retry handling in Baileys
           return undefined;
         },
         printQRInTerminal: false,
         browser: Browsers.macOS('Chrome'),
         markOnlineOnConnect: true,
         syncFullHistory: false,
-        defaultQueryTimeoutMs: 15000,
-        connectTimeoutMs: 30000,
+        defaultQueryTimeoutMs: 20000,
+        connectTimeoutMs: 40000,
+        retryRequestDelayMs: 250,
         maxMsgRetryCount: 5,
         fireInitQueries: false,
         shouldSyncHistoryMessage: () => false
@@ -372,22 +372,39 @@ class WhatsAppService {
             saveMessageToStore(msg.key.id, msg.message, msg.key.remoteJid);
           }
 
-          // Handle manual human outbound messages (syncing history)
-          if (msg.key.fromMe) {
-            const rawJid = msg.key.remoteJid || '';
+          // Identify if this is a self-chat test (e.g. Message to Myself)
+          const myJid = this.sock?.user?.id || '';
+          const myCleanPhone = myJid.split(':')[0].replace('@s.whatsapp.net', '');
+          const isSelfChat = msg.key.fromMe && myCleanPhone && rawJid.includes(myCleanPhone);
+
+          // Handle manual human outbound messages to external contacts
+          if (msg.key.fromMe && !isSelfChat) {
             if (rawJid && !rawJid.endsWith('@g.us') && rawJid !== 'status@broadcast') {
               const text = getRawMessageText(msg.message);
               if (text && text.trim().length > 0) {
-                let pNum = rawJid.replace('@s.whatsapp.net', '');
+                let pNum = rawJid.replace('@s.whatsapp.net', '').replace('@lid', '');
                 if (pNum.startsWith('880')) pNum = '0' + pNum.substring(3);
-                // Record manual message sent by user from mobile
-                console.log(`📤 Outbound Message detected to ${pNum}: "${text.trim()}"`);
+                console.log(`📤 Outbound Manual Message by Admin to ${pNum}: "${text.trim()}"`);
+
+                const savedHumanMsg = db.appendChatMessage(pNum, 'human_agent', text.trim());
+                db.setHumanTakeover(pNum, 30);
+                if (this.io) {
+                  this.io.emit('chat_message', {
+                    id: savedHumanMsg?.id,
+                    phone: pNum,
+                    role: 'human_agent',
+                    text: text.trim(),
+                    name: 'আপনি (ম্যানুয়াল চ্যাট)',
+                    timestamp: savedHumanMsg?.timestamp || new Date().toISOString()
+                  });
+                  this.io.emit('chat_ai_pause_update', { phone: pNum, isAiPaused: true });
+                }
               }
             }
             continue;
           }
 
-          // Process incoming message
+          // Process incoming message (from customer or self-test)
           await this.handleIncomingWhatsAppMessage(msg);
         }
       });
@@ -395,11 +412,12 @@ class WhatsAppService {
       // Listen for decrypted message updates (Signal retry results)
       this.sock.ev.on('messages.update', async (updates) => {
         for (const update of updates) {
-          if (update && update.key && !update.key.fromMe && update.update?.message) {
+          const msgContent = update.update?.message || update.message;
+          if (update && update.key && msgContent) {
             const msgObj = {
               key: update.key,
-              message: update.update.message,
-              pushName: update.update.pushName || ''
+              message: msgContent,
+              pushName: update.update?.pushName || update.pushName || ''
             };
             if (msgObj.key.id && msgObj.message) {
               saveMessageToStore(msgObj.key.id, msgObj.message, msgObj.key.remoteJid);
@@ -669,24 +687,20 @@ class WhatsAppService {
   async handleSingleCustomerMessage({ msg, rawJid, phoneNumber, pushName, messageText, lead, isVoiceNote, imageBuffer = null, imageMime = 'image/jpeg' }) {
     const settings = db.getSettings();
 
-    // 1. Check if Human Takeover is active for this customer
-    if (db.isAiPausedForUser(phoneNumber)) {
-      console.log(`👤 Human Agent is active for ${phoneNumber}. AI auto-reply paused.`);
-      return;
-    }
-
-    // 2. Brief natural delay before marking read
-    const readDelay = 400 + Math.floor(Math.random() * 600);
-    await this.sleep(readDelay);
-
-    // 3. Mark as read (Blue ticks)
+    // 1. Mark as read (Send Blue Ticks immediately)
     try {
       if (this.sock && this.sock.readMessages && msg.key) {
         await this.sock.readMessages([msg.key]);
       }
     } catch (e) {}
 
-    // 4. AI Auto-reply execution
+    // 2. Check if Human Takeover is active for this customer
+    if (db.isAiPausedForUser(phoneNumber)) {
+      console.log(`👤 Human Agent is active for ${phoneNumber}. AI auto-reply paused.`);
+      return;
+    }
+
+    // 3. AI Auto-reply execution
     if (settings.whatsappAiReplyEnabled !== false && this.sock) {
       // Rate limiter per user (Anti-loop protection)
       const now = Date.now();
