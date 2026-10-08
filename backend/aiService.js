@@ -60,7 +60,7 @@ class AIService {
         parts: [{ text: h.content || h.text || '' }]
       });
     }
-    
+
     const userParts = [{ text: userPrompt }];
     if (imageBuffer) {
       const base64 = Buffer.isBuffer(imageBuffer) ? imageBuffer.toString('base64') : imageBuffer;
@@ -419,7 +419,7 @@ Return a JSON with "summary" (1-2 sentence Bengali), "interestLevel" (interested
           interestLevel: parsed.interestLevel || 'interested',
           notes: parsed.notes || ''
         };
-      } catch (e) {}
+      } catch (e) { }
     }
 
     return {
@@ -432,7 +432,7 @@ Return a JSON with "summary" (1-2 sentence Bengali), "interestLevel" (interested
   async generatePostCallSummaryMessage(lead, callSummary, interestLevel) {
     const settings = db.getSettings();
     const customerName = lead.name && lead.name !== 'সম্মানিত কাস্টমার' ? lead.name : 'ভাই';
-    
+
     if (interestLevel === 'not_interested') {
       return `ধন্যবাদ ${customerName}! আমাদের সাথে কথা বলার জন্য। ভবিষ্যতে যেকোনো প্রয়োজনে আমরা আপনার পাশে আছি। — ${settings.businessName}`;
     }
