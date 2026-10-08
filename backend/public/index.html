@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OmniAI - WhatsApp AI & Autonomous Voice Calling Agent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo-icon">
+          <i class="fa-solid fa-brain"></i>
+        </div>
+        <div>
+          <h2>OmniAI <span class="badge-tag">Pro</span></h2>
+          <p class="subtitle">WhatsApp & Voice Agent</p>
+        </div>
+      </div>
+
+      <nav class="nav-menu">
+        <button class="nav-btn active" data-tab="overview">
+          <i class="fa-solid fa-chart-pie"></i> ওভারভিউ (Overview)
+        </button>
+        <button class="nav-btn" data-tab="leads">
+          <i class="fa-brands fa-whatsapp"></i> হোয়াটসঅ্যাপ লিডস (Leads)
+        </button>
+        <button class="nav-btn" data-tab="orders">
+          <i class="fa-solid fa-box-open"></i> অর্ডার ও ডিলস (Orders)
+        </button>
+        <button class="nav-btn" data-tab="calls">
+          <i class="fa-solid fa-phone-volume"></i> কল হিস্ট্রি (Call Logs)
+        </button>
+        <button class="nav-btn" data-tab="settings">
+          <i class="fa-solid fa-sliders"></i> AI কনফিগারেশন (Settings)
+        </button>
+      </nav>
+
+      <div class="sidebar-status-card">
+        <div class="status-indicator-box">
+          <span class="pulse-dot" id="system-health-dot"></span>
+          <div>
+            <h4>২৪/৭ সিস্টেম লাইভ</h4>
+            <p id="socket-status">রিয়েল-টাইম কানেক্টেড</p>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Topbar -->
+      <header class="topbar">
+        <div class="topbar-title">
+          <h1 id="page-title">ওভারভিউ ড্যাশবোর্ড</h1>
+          <p>হোয়াটসঅ্যাপ মেসেজ, ভয়েস নোট ও স্বয়ংক্রিয় এআই ভয়েস কল পরিচালনার কেন্দ্রীয় কন্ট্রোল রুম</p>
+        </div>
+        <div class="topbar-actions" style="display: flex; gap: 12px; align-items: center;">
+          <!-- Master AI Toggle Button -->
+          <div class="master-toggle-box" style="display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.06); padding: 6px 14px; border-radius: 30px; border: 1px solid rgba(255,255,255,0.1);">
+            <span style="font-size: 13px; font-weight: 500;">AI অটো-রিপ্লাই:</span>
+            <button id="master-ai-toggle-btn" class="btn btn-sm" onclick="toggleMasterAutoReply()" style="border-radius: 20px; font-size: 12px; padding: 5px 14px; font-weight: 600;">
+              লোড হচ্ছে...
+            </button>
+          </div>
+
+          <button class="btn btn-primary" onclick="openTestCallModal()">
+            <i class="fa-solid fa-phone-flip"></i> টেস্ট কল করুন
+          </button>
+        </div>
+      </header>
+
+      <!-- TAB: Overview -->
+      <section id="tab-overview" class="tab-pane active">
+        <!-- Metric Cards -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon bg-emerald">
+              <i class="fa-brands fa-whatsapp"></i>
+            </div>
+            <div>
+              <p class="stat-label">মোট মেসেজ (Messages)</p>
+              <h3 class="stat-value" id="stat-messages">0</h3>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon bg-indigo">
+              <i class="fa-solid fa-robot"></i>
+            </div>
+            <div>
+              <p class="stat-label">AI হোয়াটসঅ্যাপ রিপ্লাই (AI Replies)</p>
+              <h3 class="stat-value" id="stat-ai-replies">0</h3>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon bg-amber">
+              <i class="fa-solid fa-fire text-amber"></i>
+            </div>
+            <div>
+              <p class="stat-label">হট লিডস (Hot Leads)</p>
+              <h3 class="stat-value" id="stat-hot-leads">0</h3>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon bg-rose">
+              <i class="fa-solid fa-box-check"></i>
+            </div>
+            <div>
+              <p class="stat-label">মোট কনফার্মড অর্ডার (Orders)</p>
+              <h3 class="stat-value" id="stat-orders">0</h3>
+            </div>
+          </div>
+        </div>
+
+        <!-- Connection Widgets Grid -->
+        <div class="grid-2-col">
+          <!-- WhatsApp Connect Card -->
+          <div class="glass-card">
+            <div class="card-header">
+              <div class="card-title-group">
+                <i class="fa-brands fa-whatsapp text-emerald text-xl"></i>
+                <h3>WhatsApp Web অটোমেশন (Anti-Ban Stealth)</h3>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn btn-sm btn-outline" onclick="restartWhatsApp()" title="সেশন রিলোড">
+                  <i class="fa-solid fa-rotate-right"></i> রিস্টার্ট
+                </button>
+                <button class="btn btn-sm btn-primary" onclick="clearAndRescanWhatsApp()" style="background: rgba(99, 102, 241, 0.2); border: 1px solid #6366f1; color: #a5b4fc;" title="নতুন করে কিউআর কোড স্ক্যান">
+                  <i class="fa-solid fa-qrcode"></i> নতুন QR স্ক্যান
+                </button>
+              </div>
+            </div>
+            <div class="card-body text-center">
+              <div id="wa-loading" class="status-box">
+                <div class="spinner"></div>
+                <p>WhatsApp Web কানেকশন চেক করা হচ্ছে...</p>
+              </div>
+
+              <div id="wa-qr-container" class="qr-box hidden">
+                <p class="qr-instructions">আপনার মোবাইল থেকে WhatsApp খুলে Linked Devices দিয়ে QR কোডটি স্ক্যান করুন:</p>
+                <div class="qr-frame">
+                  <img id="wa-qr-img" src="" alt="WhatsApp QR Code">
+                </div>
+                <span class="badge badge-warning">অটো-রিফ্রেশ সক্রিয়</span>
+              </div>
+
+              <div id="wa-connected" class="connected-box hidden">
+                <div class="success-icon">
+                  <i class="fa-solid fa-circle-check"></i>
+                </div>
+                <h3>হোয়াটসঅ্যাপ সংযুক্ত আছে</h3>
+                <p>২৪ ঘণ্টা AI অটো-রিপ্লাই, ভয়েস নোট ট্রান্সক্রিপশন ও সিকোয়েন্সিয়াল হিউম্যান কিউ সক্রিয়।</p>
+                <span class="badge badge-success">সেশন লকড ও লাইভ</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Android Gateway Card -->
+          <div class="glass-card">
+            <div class="card-header">
+              <div class="card-title-group">
+                <i class="fa-solid fa-mobile-screen-button text-indigo text-xl"></i>
+                <h3>অ্যান্ড্রয়েড ফোন গেটওয়ে (SIM Caller)</h3>
+              </div>
+              <span id="gateway-badge" class="badge badge-outline">চেক করা হচ্ছে...</span>
+            </div>
+            <div class="card-body">
+              <div id="no-gateway" class="empty-state-box">
+                <i class="fa-solid fa-tower-broadcast text-rose text-3xl mb-2"></i>
+                <h4>কোনো অ্যান্ড্রয়েড ফোন কানেক্টেড নেই</h4>
+                <p>আপনার মোবাইল অ্যাপে সার্ভার URL দিয়ে কানেক্ট করুন।</p>
+              </div>
+
+              <div id="gateway-list" class="gateway-list hidden">
+                <!-- Connected Phones -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Leads & Live Chat -->
+        <div class="glass-card mt-6">
+          <div class="card-header">
+            <h3>সাম্প্রতিক হোয়াটসঅ্যাপ লিডস ও রিয়েল-টাইম স্ট্যাটাস</h3>
+          </div>
+          <div class="table-responsive">
+            <table class="custom-table">
+              <thead>
+                <tr>
+                  <th>কাস্টমার</th>
+                  <th>সর্বশেষ মেসেজ</th>
+                  <th>টেম্পারেচার</th>
+                  <th>স্ট্যাটাস</th>
+                  <th>সময়</th>
+                  <th>অ্যাকশন</th>
+                </tr>
+              </thead>
+              <tbody id="live-leads-body">
+                <!-- Injected via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB: Leads & CRM -->
+      <section id="tab-leads" class="tab-pane">
+        <div class="glass-card">
+          <div class="card-header">
+            <h3>হোয়াটসঅ্যাপ কাস্টমার লিডস (Smart CRM)</h3>
+          </div>
+          <div class="table-responsive">
+            <table class="custom-table">
+              <thead>
+                <tr>
+                  <th>নাম</th>
+                  <th>ফোন নম্বর</th>
+                  <th>মেসেজ সংখ্যা</th>
+                  <th>লিড টেম্পারেচার</th>
+                  <th>সর্বশেষ মেসেজ</th>
+                  <th>স্ট্যাটাস</th>
+                  <th>তারিখ</th>
+                  <th>অ্যাকশন</th>
+                </tr>
+              </thead>
+              <tbody id="all-leads-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB: Orders CRM -->
+      <section id="tab-orders" class="tab-pane">
+        <div class="glass-card">
+          <div class="card-header">
+            <h3>AI স্বয়ংক্রিয় অর্ডার ও বুকিং তালিকা (Auto-Orders)</h3>
+          </div>
+          <div class="table-responsive">
+            <table class="custom-table">
+              <thead>
+                <tr>
+                  <th>অর্ডার আইডি</th>
+                  <th>কাস্টমার ও ফোন</th>
+                  <th>ইমেইল</th>
+                  <th>ফেসবুক পেজ / ব্যবসা</th>
+                  <th>প্যাকেজ</th>
+                  <th>স্ট্যাটাস</th>
+                  <th>তারিখ</th>
+                  <th>অ্যাকশন</th>
+                </tr>
+              </thead>
+              <tbody id="all-orders-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB: Calls -->
+      <section id="tab-calls" class="tab-pane">
+        <div class="glass-card">
+          <div class="card-header">
+            <h3>AI কল হিস্ট্রি ও অডিও সামারি</h3>
+          </div>
+          <div class="table-responsive">
+            <table class="custom-table">
+              <thead>
+                <tr>
+                  <th>ফোন নম্বর</th>
+                  <th>স্থায়িত্ব</th>
+                  <th>আগ্রহের লেভেল</th>
+                  <th>AI সামারি (কথোপকথন ও সারসংক্ষেপ)</th>
+                  <th>তারিখ</th>
+                </tr>
+              </thead>
+              <tbody id="all-calls-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB: Settings -->
+      <section id="tab-settings" class="tab-pane">
+        <div class="glass-card max-w-3xl">
+          <div class="card-header">
+            <h3>AI ভয়েস ও হোয়াটসঅ্যাপ চ্যাট এজেন্ট কনফিগারেশন</h3>
+          </div>
+          <form id="settings-form" class="settings-grid">
+            <div class="form-group">
+              <label>ব্যবসার নাম (Business Name)</label>
+              <input type="text" id="setting-businessName" class="form-control" placeholder="আমাদের আইটি ফার্ম">
+            </div>
+
+            <div class="form-group">
+              <label>AI এজেন্টের নাম (Agent Name)</label>
+              <input type="text" id="setting-agentName" class="form-control" placeholder="সাদিয়া">
+            </div>
+
+            <div class="form-group full-width">
+              <label>সার্ভিসের সংক্ষিপ্ত বিবরণ (Service Description)</label>
+              <input type="text" id="setting-serviceDescription" class="form-control" placeholder="ডিজিটাল মার্কেটিং ও ওয়েবসাইট ডেভেলপমেন্ট">
+            </div>
+
+            <div class="form-group full-width">
+              <label><i class="fa-solid fa-link text-indigo"></i> অফিশিয়াল ওয়েবসাইট লিংক (Website URL)</label>
+              <input type="url" id="setting-websiteUrl" class="form-control" placeholder="https://yourbusiness.com">
+            </div>
+
+            <!-- Knowledge Base & Service Matrix -->
+            <div class="form-group full-width" style="background: rgba(255,255,255,0.03); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08);">
+              <h4 style="margin-bottom: 8px; color: #38bdf8; display: flex; align-items: center; gap: 8px;">
+                <i class="fa-solid fa-book-open"></i> 📚 সার্ভিস ও প্যাকেজ নলেজ বেস (Knowledge Base & Pricing Matrix)
+              </h4>
+              <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+                আপনার সব সার্ভিস, যেমন: <strong>ওয়ার্ডপ্রেস বনাম কাস্টম কোডিং ল্যান্ডিং পেজের মূল্য ও পার্থক্য</strong>, হোস্টিং প্ল্যান, ডেমো সাইটের লিংক ও ডেলিভারি সময় এখানে বিস্তারিত লিখে রাখুন। AI এটি পড়ে মনে রাখবে এবং কাস্টমারকে ১০০% নির্ভুল উত্তর দেবে।
+              </p>
+              <textarea id="setting-knowledgeBase" rows="8" class="form-control" style="font-family: monospace; font-size: 13px; line-height: 1.5;"></textarea>
+            </div>
+
+            <div class="form-group">
+              <label>AI ইঞ্জিন নির্বাচন (AI Provider)</label>
+              <select id="setting-aiProvider" class="form-control">
+                <option value="gemini">Google Gemini (স্মার্ট ও নিখুঁত বাংলা)</option>
+                <option value="groq">Groq Cloud (সুপার ফাস্ট)</option>
+                <option value="auto">Auto Fallback (Gemini + Groq)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Google Gemini API Key (ফ্রি: aistudio.google.com)</label>
+              <input type="password" id="setting-geminiKey" class="form-control" placeholder="AIzaSy...">
+            </div>
+
+            <div class="form-group">
+              <label>Groq API Key (ফ্রি: console.groq.com - ভয়েস নোটের জন্য)</label>
+              <input type="password" id="setting-groqKey" class="form-control" placeholder="gsk_...">
+            </div>
+
+            <div class="form-group">
+              <label>স্বয়ংক্রিয় ভয়েস কল বিলম্ব (Delay Seconds)</label>
+              <input type="number" id="setting-autoCallDelay" class="form-control" value="15">
+            </div>
+
+            <!-- Image Package Catalog Settings -->
+            <div class="form-group full-width" style="background: rgba(255,255,255,0.03); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08);">
+              <h4 style="margin-bottom: 10px; color: #a855f7; display: flex; align-items: center; gap: 8px;">
+                <i class="fa-solid fa-cloud-arrow-up"></i> 📸 সরাসরি প্যাকেজ ইমেজ আপলোড (Direct Image Uploader)
+              </h4>
+              <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+                আপনার কম্পিউটার বা মোবাইল থেকে সরাসরি প্যাকেজের ছবি আপলোড করুন। কাস্টমার হোয়াটসঅ্যাপে জানতে চাইলে AI টেক্সটের সাথে এই ছবিগুলো পাঠাবে।
+              </p>
+              
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <!-- Hosting Image Upload Card -->
+                <div style="background: rgba(0,0,0,0.25); padding: 16px; border-radius: 10px; border: 1px dashed rgba(255,255,255,0.15); text-align: center;">
+                  <h5 style="color: var(--indigo); margin-bottom: 8px; font-size: 14px;">
+                    <i class="fa-solid fa-server"></i> ১. হোস্টিং প্যাকেজের ছবি
+                  </h5>
+                  <div id="hosting-img-preview-box" style="margin-bottom: 12px; min-height: 120px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.02); border-radius: 8px;">
+                    <img id="hosting-img-preview" src="" alt="Hosting Image Preview" style="max-height: 140px; max-width: 100%; border-radius: 6px; display: none;">
+                    <span id="hosting-img-empty" style="font-size: 12px; color: var(--text-secondary);">কোনো ছবি আপলোড করা নেই</span>
+                  </div>
+                  <input type="file" id="hosting-file-input" accept="image/*" style="display: none;" onchange="handleDirectUpload('hosting', this)">
+                  <button type="button" class="btn btn-sm btn-outline" style="width: 100%;" onclick="document.getElementById('hosting-file-input').click()">
+                    <i class="fa-solid fa-upload"></i> হোস্টিং ছবি আপলোড করুন
+                  </button>
+                  <input type="hidden" id="setting-hostingImageUrl">
+                </div>
+
+                <!-- Website Image Upload Card -->
+                <div style="background: rgba(0,0,0,0.25); padding: 16px; border-radius: 10px; border: 1px dashed rgba(255,255,255,0.15); text-align: center;">
+                  <h5 style="color: var(--emerald); margin-bottom: 8px; font-size: 14px;">
+                    <i class="fa-solid fa-globe"></i> ২. ওয়েবসাইট ও ল্যান্ডিং পেজ প্যাকেজের ছবি
+                  </h5>
+                  <div id="website-img-preview-box" style="margin-bottom: 12px; min-height: 120px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.02); border-radius: 8px;">
+                    <img id="website-img-preview" src="" alt="Website Image Preview" style="max-height: 140px; max-width: 100%; border-radius: 6px; display: none;">
+                    <span id="website-img-empty" style="font-size: 12px; color: var(--text-secondary);">কোনো ছবি আপলোড করা নেই</span>
+                  </div>
+                  <input type="file" id="website-file-input" accept="image/*" style="display: none;" onchange="handleDirectUpload('website', this)">
+                  <button type="button" class="btn btn-sm btn-primary" style="width: 100%;" onclick="document.getElementById('website-file-input').click()">
+                    <i class="fa-solid fa-upload"></i> ওয়েবসাইট ছবি আপলোড করুন
+                  </button>
+                  <input type="hidden" id="setting-websiteImageUrl">
+                </div>
+              </div>
+            </div>
+
+            <!-- Auto Reply & Stealth Toggles -->
+            <div class="form-group full-width" style="background: rgba(255,255,255,0.03); padding: 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08);">
+              <h4 style="margin-bottom: 14px; color: var(--emerald); display: flex; align-items: center; gap: 8px;">
+                <i class="fa-brands fa-whatsapp"></i> স্মার্ট হোয়াটসঅ্যাপ অটোমেশন ও অ্যান্টি-ব্যান সেটিংস
+              </h4>
+              <div style="display: flex; flex-direction: column; gap: 12px;">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                  <input type="checkbox" id="setting-whatsappAiReplyEnabled" checked style="width: 18px; height: 18px; accent-color: var(--emerald);">
+                  <span><strong>২৪ ঘণ্টা স্বয়ংক্রিয় AI মেসেজ রিপ্লাই সক্রিয় রাখুন</strong></span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                  <input type="checkbox" id="setting-voiceNoteTranscribeEnabled" checked style="width: 18px; height: 18px; accent-color: var(--emerald);">
+                  <span><strong>ভয়েস নোট ট্রান্সক্রিপশন (Groq Whisper)</strong> — কাস্টমার ভয়েস পাঠালে তা শুনে টেক্সটে রূপান্তর করে AI উত্তর দেবে।</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                  <input type="checkbox" id="setting-humanTypingDelay" checked style="width: 18px; height: 18px; accent-color: var(--emerald);">
+                  <span><strong>হিউম্যান টাইপিং ও অ্যান্টি-ব্যান কিউ (Anti-Ban Stealth Mode)</strong> — প্রাকৃতিক টাইপিং স্ট্যাটাস ও বিরতি মেনে কাজ করবে।</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                  <input type="checkbox" id="setting-postCallSummaryWhatsAppEnabled" checked style="width: 18px; height: 18px; accent-color: var(--emerald);">
+                  <span><strong>কল শেষের সাথে সাথে WhatsApp সামারি ও পেমেন্ট রিসিট পাঠানো</strong></span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                  <input type="checkbox" id="setting-autoCallEnabled" style="width: 18px; height: 18px; accent-color: var(--indigo);">
+                  <span><strong>কাস্টমার কল চাইলে স্বয়ংক্রিয় ভয়েস কল ইনিশিয়েট করুন</strong></span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Telegram Notification Settings -->
+            <div class="form-group full-width" style="background: rgba(255,255,255,0.03); padding: 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08);">
+              <h4 style="margin-bottom: 14px; color: #38bdf8; display: flex; align-items: center; gap: 8px;">
+                <i class="fa-brands fa-telegram"></i> টেলিগ্রাম রিয়েল-টাইম অ্যালার্ট (Telegram Alerts)
+              </h4>
+              <div style="display: flex; flex-direction: column; gap: 12px;">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                  <input type="checkbox" id="setting-telegramNotificationEnabled" style="width: 18px; height: 18px; accent-color: #38bdf8;">
+                  <span><strong>হট লিড ও নতুন অর্ডারে টেলিগ্রামে নোটিফিকেশন পাঠান</strong></span>
+                </label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                  <input type="text" id="setting-telegramBotToken" class="form-control" placeholder="Telegram Bot Token (e.g. 123456:ABC...)">
+                  <input type="text" id="setting-telegramChatId" class="form-control" placeholder="Telegram Chat ID (e.g. 987654321)">
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group full-width">
+              <label>হোয়াটসঅ্যাপ চ্যাটের জন্য AI প্রম্পট (WhatsApp Chat Prompt)</label>
+              <textarea id="setting-whatsappChatPrompt" rows="5" class="form-control"></textarea>
+            </div>
+
+            <div class="form-group full-width">
+              <label>ফোন কলের জন্য AI প্রম্পট (Voice Call System Prompt)</label>
+              <textarea id="setting-systemPrompt" rows="5" class="form-control"></textarea>
+            </div>
+
+            <div class="form-actions full-width">
+              <button type="submit" class="btn btn-primary">
+                <i class="fa-solid fa-floppy-disk"></i> সেটিংস সেভ করুন
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Live Human Takeover & Chat Modal -->
+  <div id="chat-modal" class="modal-backdrop hidden">
+    <div class="modal-box" style="max-width: 650px; display: flex; flex-direction: column; height: 85vh;">
+      <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px;">
+        <div>
+          <h3 style="display: flex; align-items: center; gap: 8px;">
+            <i class="fa-brands fa-whatsapp text-emerald"></i>
+            <span id="chat-modal-title">কাস্টমার চ্যাট</span>
+            <span id="chat-temp-badge"></span>
+          </h3>
+          <p id="chat-ai-status" style="font-size: 12px; color: var(--emerald); margin-top: 4px;">
+            <i class="fa-solid fa-robot"></i> AI অটো-রিপ্লাই চালু আছে
+          </p>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button id="btn-toggle-ai-pause" class="btn btn-sm btn-outline" onclick="toggleAiPause()">
+            <i class="fa-solid fa-pause"></i> AI পজ করুন
+          </button>
+          <button class="close-btn" onclick="closeChatModal()">&times;</button>
+        </div>
+      </div>
+
+      <!-- Messages container -->
+      <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 16px; background: rgba(0,0,0,0.25); border-radius: 8px; margin: 12px 0;" id="chat-messages-container">
+        <!-- Messages loaded here -->
+      </div>
+
+      <!-- Live Takeover Input Bar -->
+      <div style="display: flex; gap: 8px; padding-top: 8px;">
+        <input type="text" id="manual-chat-input" class="form-control" placeholder="মানুষ হিসেবে সরাসরি মেসেজ লিখুন (Human Takeover)..." onkeypress="handleChatKeyPress(event)">
+        <button class="btn btn-primary" onclick="sendManualChatMessage()">
+          <i class="fa-solid fa-paper-plane"></i> পাঠান
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Test Call Modal -->
+  <div id="test-call-modal" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-phone text-indigo"></i> সরাসরি টেস্ট কল করুন</h3>
+        <button class="close-btn" onclick="closeTestCallModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-4">একটি বাংলাদেশি ফোন নম্বর লিখুন। আপনার কানেক্টেড অ্যান্ড্রয়েড ফোন দিয়ে সাথে সাথে AI কল ডায়াল হবে।</p>
+        <div class="form-group">
+          <label>কাস্টমারের নাম</label>
+          <input type="text" id="test-name" class="form-control" placeholder="যেমন: তানভীর ভাই">
+        </div>
+        <div class="form-group">
+          <label>ফোন নম্বর (১১ ডিজিট)</label>
+          <input type="text" id="test-phone" class="form-control" placeholder="01XXXXXXXXX">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeTestCallModal()">বাতিল</button>
+        <button class="btn btn-primary" onclick="submitTestCall()">
+          <i class="fa-solid fa-paper-plane"></i> কল পাঠান
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

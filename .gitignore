@@ -1,0 +1,8 @@
+node_modules/
+backend/whatsapp-auth/
+backend/data.json
+backend/msg_store.json
+backend/.env
+backend/public/uploads/
+.DS_Store
+*.log
