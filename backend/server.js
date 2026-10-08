@@ -303,8 +303,10 @@ app.post('/api/chat/send-manual', async (req, res) => {
     return res.status(400).json({ error: 'Phone and message are required' });
   }
 
-  // Set Human Takeover (Pauses AI auto-reply for specified minutes, default 30)
-  db.setHumanTakeover(phone, pauseMinutes || 30);
+  // If explicitly requested to pause AI, set takeover
+  if (pauseMinutes && pauseMinutes > 0) {
+    db.setHumanTakeover(phone, pauseMinutes);
+  }
   
   const lead = db.getLeads().find(l => l.phone === phone || l.realPhone === phone);
   const sent = await whatsappService.sendTextMessage(phone, message);
@@ -333,7 +335,7 @@ app.post('/api/chat/send-manual', async (req, res) => {
     recordLiveEvent(streamPayload);
     io.emit('live_stream_event', streamPayload);
     
-    res.json({ success: true, message: 'Message sent by human agent & AI paused.' });
+    res.json({ success: true, message: 'Message sent successfully.' });
   } else {
     res.status(500).json({ error: 'Failed to send message. Is WhatsApp connected?' });
   }

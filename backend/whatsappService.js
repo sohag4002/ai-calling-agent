@@ -380,14 +380,22 @@ class WhatsAppService {
           // Handle manual human outbound messages to external contacts
           if (msg.key.fromMe && !isSelfChat) {
             if (rawJid && !rawJid.endsWith('@g.us') && rawJid !== 'status@broadcast') {
+              const msgId = msg.key.id;
+              if (msgId && processedMsgCache.has(msgId)) {
+                // Already processed and rendered via dashboard API
+                continue;
+              }
+              if (msgId) {
+                processedMsgCache.set(msgId, true);
+              }
+
               const text = getRawMessageText(msg.message);
               if (text && text.trim().length > 0) {
                 let pNum = rawJid.replace('@s.whatsapp.net', '').replace('@lid', '');
                 if (pNum.startsWith('880')) pNum = '0' + pNum.substring(3);
-                console.log(`📤 Outbound Manual Message by Admin to ${pNum}: "${text.trim()}"`);
+                console.log(`📤 Outbound Manual Message by Phone to ${pNum}: "${text.trim()}"`);
 
                 const savedHumanMsg = db.appendChatMessage(pNum, 'human_agent', text.trim());
-                db.setHumanTakeover(pNum, 30);
                 if (this.io) {
                   this.io.emit('chat_message', {
                     id: savedHumanMsg?.id,
@@ -397,7 +405,6 @@ class WhatsAppService {
                     name: 'আপনি (ম্যানুয়াল চ্যাট)',
                     timestamp: savedHumanMsg?.timestamp || new Date().toISOString()
                   });
-                  this.io.emit('chat_ai_pause_update', { phone: pNum, isAiPaused: true });
                 }
               }
             }
