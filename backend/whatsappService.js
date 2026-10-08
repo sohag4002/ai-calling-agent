@@ -309,9 +309,18 @@ class WhatsAppService {
           }
 
           // Identify if this is a self-chat test (e.g. Message to Myself)
-          const myJid = this.sock?.user?.id || '';
-          const myCleanPhone = myJid.split(':')[0].replace('@s.whatsapp.net', '');
-          const isSelfChat = msg.key.fromMe && myCleanPhone && rawJid.includes(myCleanPhone);
+          const myId = (this.sock?.user?.id || '').split(':')[0].replace(/[^0-9]/g, '');
+          const myLid = (this.sock?.user?.lid || '').split(':')[0].replace(/[^0-9]/g, '');
+          const cleanRaw = rawJid.split(':')[0].replace(/[^0-9]/g, '');
+          
+          const isSelfChat = msg.key.fromMe && (
+            (myId && cleanRaw === myId) ||
+            (myLid && cleanRaw === myLid) ||
+            (myId && rawJid.includes(myId)) ||
+            (myLid && rawJid.includes(myLid))
+          );
+
+          console.log(`🔎 [CHECK] fromMe: ${msg.key.fromMe}, isSelfChat: ${isSelfChat}, myId: ${myId}, myLid: ${myLid}, rawJid: ${rawJid}`);
 
           // Handle manual human outbound messages to external contacts
           if (msg.key.fromMe && !isSelfChat) {
