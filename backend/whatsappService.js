@@ -449,16 +449,28 @@ class WhatsAppService {
     if (msgId && processedMsgCache.has(msgId)) {
       return; // Already enqueued and processed
     }
+    if (msgId) {
+      processedMsgCache.set(msgId, true);
+    }
+
+    // Immediately send Blue Tick (Read Receipt) to WhatsApp servers
+    if (this.sock && this.sock.readMessages && msg.key) {
+      try {
+        await this.sock.readMessages([msg.key]);
+      } catch (readErr) {
+        console.warn('Read receipt note:', readErr?.message);
+      }
+    }
 
     // Check for direct phone number JID from WhatsApp senderPn / participantPn
     const senderPnJid = msg.key?.senderPn || msg.key?.participantPn;
     let realNumber = null;
     if (senderPnJid) {
-      realNumber = senderPnJid.replace('@s.whatsapp.net', '');
+      realNumber = senderPnJid.replace('@s.whatsapp.net', '').replace('@lid', '');
       if (realNumber.startsWith('880')) realNumber = '0' + realNumber.substring(3);
     }
 
-    let phoneNumber = rawJid.replace('@s.whatsapp.net', '');
+    let phoneNumber = rawJid.replace('@s.whatsapp.net', '').replace('@lid', '');
     if (phoneNumber.startsWith('880')) {
       phoneNumber = '0' + phoneNumber.substring(3);
     } else if (!phoneNumber.startsWith('0') && phoneNumber.length === 10) {
@@ -755,8 +767,11 @@ class WhatsAppService {
           sentMsg = await this.sock.sendMessage(targetJid, { text: replyText });
         }
 
-        if (sentMsg && sentMsg.key && sentMsg.key.id && sentMsg.message) {
-          saveMessageToStore(sentMsg.key.id, sentMsg.message, sentMsg.key.remoteJid);
+        if (sentMsg?.key?.id) {
+          processedMsgCache.set(sentMsg.key.id, true);
+          if (sentMsg.message) {
+            saveMessageToStore(sentMsg.key.id, sentMsg.message, sentMsg.key.remoteJid);
+          }
         }
 
         console.log(`🤖 AI Auto-Replied to ${pushName} (${phoneNumber}): "${replyText}"`);
@@ -839,16 +854,27 @@ class WhatsAppService {
       return false;
     }
 
-    let jid = phoneNumber.replace(/[^0-9]/g, '');
-    if (jid.startsWith('01')) {
-      jid = '880' + jid.substring(1);
+    let jid = String(phoneNumber || '').trim();
+    if (!jid.endsWith('@s.whatsapp.net') && !jid.endsWith('@lid') && !jid.endsWith('@g.us')) {
+      let digits = jid.replace(/[^0-9]/g, '');
+      if (digits.startsWith('01') && digits.length === 11) {
+        jid = `880${digits.substring(1)}@s.whatsapp.net`;
+      } else if (digits.startsWith('8801') && digits.length === 13) {
+        jid = `${digits}@s.whatsapp.net`;
+      } else if (digits.length > 13) {
+        jid = `${digits}@lid`;
+      } else {
+        jid = `${digits}@s.whatsapp.net`;
+      }
     }
-    jid = `${jid}@s.whatsapp.net`;
 
     try {
       const sent = await this.sock.sendMessage(jid, { text });
-      if (sent?.key?.id && sent?.message) {
-        saveMessageToStore(sent.key.id, sent.message);
+      if (sent?.key?.id) {
+        processedMsgCache.set(sent.key.id, true);
+        if (sent?.message) {
+          saveMessageToStore(sent.key.id, sent.message, sent.key.remoteJid);
+        }
       }
       return true;
     } catch (err) {

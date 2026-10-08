@@ -602,8 +602,9 @@ function renderChatBubbleHtml(m) {
     `;
   }
 
+  const msgId = m.id || `msg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
   return `
-    <div class="chat-msg-row ${rowClass}">
+    <div class="chat-msg-row ${rowClass}" data-msg-id="${msgId}" data-text="${encodeURIComponent(m.text || '')}">
       <div class="chat-bubble ${bubbleClass}">
         <div class="msg-header">
           <strong>${senderLabel}</strong>
@@ -635,10 +636,29 @@ function appendInboxMessageDirect(msg) {
   const emptyState = container.querySelector('.inbox-empty-state');
   if (emptyState) emptyState.remove();
 
+  // Deduplication check: verify if message already rendered
+  if (msg.id) {
+    const existingById = container.querySelector(`[data-msg-id="${msg.id}"]`);
+    if (existingById) return;
+  }
+  const encodedText = encodeURIComponent(msg.text || '');
+  const existingByText = container.querySelectorAll(`[data-text="${encodedText}"]`);
+  if (existingByText.length > 0) {
+    const lastMatch = existingByText[existingByText.length - 1];
+    // If exact same text was rendered within last 5 seconds, ignore
+    if (Date.now() - (lastMatch._renderedAt || 0) < 5000) {
+      return;
+    }
+  }
+
   const tempDiv = document.createElement('div');
   tempDiv.innerHTML = renderChatBubbleHtml(msg);
-  container.appendChild(tempDiv.firstElementChild);
-  container.scrollTop = container.scrollHeight;
+  const element = tempDiv.firstElementChild;
+  if (element) {
+    element._renderedAt = Date.now();
+    container.appendChild(element);
+    container.scrollTop = container.scrollHeight;
+  }
 }
 
 async function sendInboxManualMessage() {
@@ -651,11 +671,10 @@ async function sendInboxManualMessage() {
     const res = await fetch('/api/chat/send-manual', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone: selectedInboxPhone, message, pauseMinutes: 30 })
+      body: JSON.stringify({ phone: selectedInboxPhone, message, pauseMinutes: 0 })
     });
     if (res.ok) {
-      showToast('📤 মেসেজ সরাসরি ক্লায়েন্টকে পাঠানো হয়েছে (AI ৩০ মিনিটের জন্য পজ)');
-      await loadActiveInboxChatHistory(selectedInboxPhone);
+      showToast('📤 মেসেজ সরাসরি ক্লায়েন্টকে পাঠানো হয়েছে');
       await loadInboxConversations();
     } else {
       showToast('❌ মেসেজ পাঠানো যায়নি');

@@ -214,34 +214,62 @@ module.exports = {
   getChatHistory: (phone, realPhone = null) => {
     const db = getDb();
     if (!db.chatHistories) return [];
-    const h1 = db.chatHistories[phone] || [];
-    const h2 = (realPhone && realPhone !== phone) ? (db.chatHistories[realPhone] || []) : [];
     
-    if (h2.length === 0) return h1;
-    if (h1.length === 0) return h2;
+    // Collect all possible key aliases for this contact
+    const possibleKeys = new Set([phone]);
+    if (realPhone) possibleKeys.add(realPhone);
+    if (phone && phone.includes('@lid')) possibleKeys.add(phone.replace('@lid', ''));
+    if (phone && !phone.includes('@lid')) possibleKeys.add(`${phone}@lid`);
+    if (realPhone && !realPhone.includes('@lid')) possibleKeys.add(`${realPhone}@lid`);
 
-    // Merge and deduplicate by text & timestamp
-    const all = [...h1, ...h2].sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
+    // Check leads for linked phone/realPhone
+    const linkedLead = (db.leads || []).find(l => possibleKeys.has(l.phone) || (l.realPhone && possibleKeys.has(l.realPhone)));
+    if (linkedLead) {
+      if (linkedLead.phone) possibleKeys.add(linkedLead.phone);
+      if (linkedLead.realPhone) possibleKeys.add(linkedLead.realPhone);
+    }
+
+    let all = [];
+    for (const k of possibleKeys) {
+      if (k && db.chatHistories[k]) {
+        all.push(...db.chatHistories[k]);
+      }
+    }
+
+    if (all.length === 0) return [];
+
+    // Merge and deduplicate by role + text + time window (5 seconds)
+    all.sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
     const unique = [];
-    const seen = new Set();
     for (const item of all) {
-      const key = `${item.role}_${item.text}_${(item.timestamp || '').substring(0, 16)}`;
-      if (!seen.has(key)) {
-        seen.add(key);
+      const isDuplicate = unique.some(existing => {
+        if (existing.id && item.id && existing.id === item.id) return true;
+        const timeDiff = Math.abs(new Date(existing.timestamp || 0) - new Date(item.timestamp || 0));
+        return existing.role === item.role && existing.text?.trim() === item.text?.trim() && timeDiff < 8000;
+      });
+      if (!isDuplicate) {
         unique.push(item);
       }
     }
     return unique.slice(-50);
   },
   appendChatMessage: (phone, role, text, realPhone = null, meta = {}) => {
+    if (!phone || phone === 'undefined') return null;
     const db = getDb();
     if (!db.chatHistories) db.chatHistories = {};
     if (!db.chatHistories[phone]) db.chatHistories[phone] = [];
     
+    const existingList = db.chatHistories[phone];
+    // Prevent duplicate appending if last message has same role and text within 8 seconds
+    const lastMsg = existingList[existingList.length - 1];
+    if (lastMsg && lastMsg.role === role && lastMsg.text?.trim() === text?.trim() && (Date.now() - new Date(lastMsg.timestamp || 0).getTime()) < 8000) {
+      return lastMsg;
+    }
+
     const item = {
       id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
       role, // 'user' | 'assistant' | 'human_agent'
-      text,
+      text: text?.trim() || '',
       timestamp: new Date().toISOString(),
       meta: meta || {}
     };
@@ -252,11 +280,15 @@ module.exports = {
     }
 
     // Sync to realPhone key as well if available
-    if (realPhone && realPhone !== phone) {
+    if (realPhone && realPhone !== phone && realPhone !== 'undefined') {
       if (!db.chatHistories[realPhone]) db.chatHistories[realPhone] = [];
-      db.chatHistories[realPhone].push(item);
-      if (db.chatHistories[realPhone].length > 50) {
-        db.chatHistories[realPhone] = db.chatHistories[realPhone].slice(-50);
+      const realList = db.chatHistories[realPhone];
+      const lastReal = realList[realList.length - 1];
+      if (!lastReal || lastReal.role !== role || lastReal.text?.trim() !== text?.trim() || (Date.now() - new Date(lastReal.timestamp || 0).getTime()) >= 8000) {
+        db.chatHistories[realPhone].push(item);
+        if (db.chatHistories[realPhone].length > 50) {
+          db.chatHistories[realPhone] = db.chatHistories[realPhone].slice(-50);
+        }
       }
     }
 
@@ -273,21 +305,77 @@ module.exports = {
     const chatHistories = db.chatHistories || {};
     const takeovers = db.takeovers || {};
 
-    const phoneSet = new Set([
-      ...leads.map(l => l.phone),
-      ...Object.keys(chatHistories).filter(k => k && k !== 'undefined')
-    ]);
+    // Group keys by canonical customer identity
+    const canonicalGroups = new Map(); // canonicalKey -> { primaryPhone, realPhone, keys: Set, lead }
+
+    const registerKey = (key) => {
+      if (!key || key === 'undefined') return;
+      const cleanKey = key.replace('@lid', '');
+      
+      // Find matching lead
+      const matchedLead = leads.find(l => 
+        l.phone === key || l.phone === cleanKey || l.phone === `${cleanKey}@lid` ||
+        (l.realPhone && (l.realPhone === key || l.realPhone === cleanKey))
+      );
+
+      const canonicalKey = matchedLead?.realPhone || matchedLead?.phone || cleanKey;
+      if (!canonicalGroups.has(canonicalKey)) {
+        canonicalGroups.set(canonicalKey, {
+          primaryPhone: matchedLead?.phone || key,
+          realPhone: matchedLead?.realPhone || (cleanKey.startsWith('01') ? cleanKey : null),
+          keys: new Set([key, cleanKey]),
+          lead: matchedLead
+        });
+      } else {
+        const grp = canonicalGroups.get(canonicalKey);
+        grp.keys.add(key);
+        grp.keys.add(cleanKey);
+        if (matchedLead && !grp.lead) grp.lead = matchedLead;
+        if (matchedLead?.realPhone) grp.realPhone = matchedLead.realPhone;
+      }
+    };
+
+    leads.forEach(l => {
+      registerKey(l.phone);
+      if (l.realPhone) registerKey(l.realPhone);
+    });
+
+    Object.keys(chatHistories).forEach(k => {
+      if (k && k !== 'undefined') registerKey(k);
+    });
 
     const conversations = [];
-    for (const phone of phoneSet) {
-      const lead = leads.find(l => l.phone === phone || l.realPhone === phone);
-      const history = chatHistories[phone] || (lead?.realPhone ? chatHistories[lead.realPhone] : []) || [];
-      const lastMsg = history[history.length - 1];
-      const isAiPaused = takeovers[phone] && Date.now() < takeovers[phone].pausedUntil;
+    for (const [canonicalKey, grp] of canonicalGroups.entries()) {
+      const lead = grp.lead;
+      
+      // Collect and deduplicate all messages across this contact's keys
+      let allMessages = [];
+      for (const k of grp.keys) {
+        if (chatHistories[k]) {
+          allMessages.push(...chatHistories[k]);
+        }
+      }
+
+      allMessages.sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
+      const uniqueMessages = [];
+      for (const item of allMessages) {
+        const isDuplicate = uniqueMessages.some(existing => {
+          if (existing.id && item.id && existing.id === item.id) return true;
+          const timeDiff = Math.abs(new Date(existing.timestamp || 0) - new Date(item.timestamp || 0));
+          return existing.role === item.role && existing.text?.trim() === item.text?.trim() && timeDiff < 8000;
+        });
+        if (!isDuplicate) {
+          uniqueMessages.push(item);
+        }
+      }
+
+      const lastMsg = uniqueMessages[uniqueMessages.length - 1];
+      const isAiPaused = (takeovers[grp.primaryPhone] && Date.now() < takeovers[grp.primaryPhone].pausedUntil) ||
+                         (grp.realPhone && takeovers[grp.realPhone] && Date.now() < takeovers[grp.realPhone].pausedUntil);
 
       conversations.push({
-        phone: phone,
-        realPhone: lead?.realPhone || (phone.includes('@lid') ? null : phone),
+        phone: grp.primaryPhone,
+        realPhone: grp.realPhone || (grp.primaryPhone.includes('@lid') ? null : grp.primaryPhone),
         name: lead?.name || 'সম্মানিত কাস্টমার',
         temperature: lead?.temperature || 'warm',
         score: lead?.score || 50,
@@ -297,12 +385,12 @@ module.exports = {
         lastMessage: lastMsg?.text || lead?.lastMessage || '',
         lastMessageTime: lastMsg?.timestamp || lead?.updatedAt || lead?.createdAt || new Date().toISOString(),
         lastMessageRole: lastMsg?.role || 'user',
-        messageCount: history.length || lead?.messageCount || 1,
+        messageCount: uniqueMessages.length || lead?.messageCount || 1,
         meta: lastMsg?.meta || {}
       });
     }
 
-    // Sort by latest message time
+    // Sort by latest message time descending
     return conversations.sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
   },
   // Human Takeover state
