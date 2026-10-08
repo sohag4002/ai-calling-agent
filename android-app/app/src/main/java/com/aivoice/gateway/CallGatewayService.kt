@@ -106,7 +106,7 @@ class CallGatewayService : Service() {
 
             socket?.connect()
         } catch (e: Exception) {
-            Log.error(TAG, "Socket init failed: ${e.message}")
+            Log.e(TAG, "Socket init failed: ${e.message}")
         }
     }
 

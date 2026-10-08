@@ -61,7 +61,7 @@ class CallAudioBridge(private val context: Context) : TextToSpeech.OnInitListene
             audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
             audioManager.isSpeakerphoneOn = true // Route call audio smoothly
         } catch (e: Exception) {
-            Log.error(TAG, "Failed setting audio mode: ${e.message}")
+            Log.e(TAG, "Failed setting audio mode: ${e.message}")
         }
 
         // Delay 1.5 seconds after pickup then speak initial greeting
@@ -136,7 +136,7 @@ class CallAudioBridge(private val context: Context) : TextToSpeech.OnInitListene
 
                 speechRecognizer?.startListening(intent)
             } catch (e: Exception) {
-                Log.error(TAG, "Start listening exception: ${e.message}")
+                Log.e(TAG, "Start listening exception: ${e.message}")
             }
         }
     }
