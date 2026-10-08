@@ -127,66 +127,6 @@ function getRawMessageText(m) {
   return '';
 }
 
-function createAutoHealingSignalKeyStore(stateKeys, authPath) {
-  const cache = new NodeCache({ stdTTL: 180, checkperiod: 60 });
-  
-  function getUniqueId(type, id) {
-    return `${type}.${id}`;
-  }
-
-  const store = {
-    async get(type, ids) {
-      const data = {};
-      const idsToFetch = [];
-      for (const id of ids) {
-        const item = cache.get(getUniqueId(type, id));
-        if (typeof item !== 'undefined') {
-          data[id] = item;
-        } else {
-          idsToFetch.push(id);
-        }
-      }
-      if (idsToFetch.length) {
-        const fetched = await stateKeys.get(type, idsToFetch);
-        for (const id of idsToFetch) {
-          const item = fetched[id];
-          if (item) {
-            data[id] = item;
-            cache.set(getUniqueId(type, id), item);
-          }
-        }
-      }
-      return data;
-    },
-    async set(data) {
-      for (const type in data) {
-        for (const id in data[type]) {
-          if (data[type][id] === null || data[type][id] === undefined) {
-            cache.del(getUniqueId(type, id));
-          } else {
-            cache.set(getUniqueId(type, id), data[type][id]);
-          }
-        }
-      }
-      await stateKeys.set(data);
-    },
-    async clearSession(sessionId) {
-      try {
-        const cleanId = sessionId.replace(/\//g, '__').replace(/:/g, '-');
-        const sessionFile = path.join(authPath, `session-${cleanId}.json`);
-        cache.del(getUniqueId('session', sessionId));
-        if (fs.existsSync(sessionFile)) {
-          fs.unlinkSync(sessionFile);
-        }
-        await stateKeys.set({ session: { [sessionId]: null } });
-        console.log(`🛡️ Auto-healed & purged desynchronized session: ${sessionId}`);
-      } catch (e) {}
-    }
-  };
-
-  return store;
-}
-
 class WhatsAppService {
   constructor() {
     this.sock = null;
@@ -202,15 +142,11 @@ class WhatsAppService {
     this.recentUserMessages = new Map(); // phone -> { count, resetAt }
     this.isStarting = false;
 
-    // Global Signal Error Auto-Recovery
+    // Safe unhandled rejection logger
     process.on('unhandledRejection', (reason) => {
       const errStr = (reason?.stack || reason?.message || String(reason));
-      if (errStr.includes('Bad MAC') || errStr.includes('Failed to decrypt message')) {
-        const match = /([0-9a-zA-Z_@.-]+\.[0-9]+)/.exec(errStr);
-        if (match && this.signalKeyStore) {
-          const badId = match[1];
-          this.signalKeyStore.clearSession(badId);
-        }
+      if (!errStr.includes('Bad MAC') && !errStr.includes('Failed to decrypt message')) {
+        console.warn('Unhandled Warning:', errStr.substring(0, 150));
       }
     });
   }
@@ -264,7 +200,7 @@ class WhatsAppService {
       }
 
       const customPino = pino({ level: 'warn' });
-      this.signalKeyStore = createAutoHealingSignalKeyStore(state.keys, authPath);
+      this.signalKeyStore = makeCacheableSignalKeyStore(state.keys, customPino);
 
       this.sock = makeWASocket({
         version,
