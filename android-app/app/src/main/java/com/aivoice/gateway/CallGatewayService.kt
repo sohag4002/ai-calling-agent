@@ -7,11 +7,14 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.telecom.TelecomManager
 import android.telephony.PhoneStateListener
+import android.telephony.SubscriptionManager
 import android.telephony.TelephonyManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -49,11 +52,11 @@ class CallGatewayService : Service() {
     override fun onCreate() {
         super.onCreate()
         isRunning = true
-        onStatusListener?.invoke(true, "গেটওয়ে সার্ভিস শুরু হচ্ছে...")
+        onStatusListener?.invoke(true, "সক্রিয় ও কানেক্টেড ✅")
 
         try {
             createNotificationChannel()
-            val notification = buildNotification("AI Call Gateway ব্যাকগ্রাউন্ডে চলছে...")
+            val notification = buildNotification("AI Call Gateway সক্রিয় ও ব্যাকগ্রাউন্ডে চলছে...")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
             } else {
@@ -98,8 +101,10 @@ class CallGatewayService : Service() {
             socket?.disconnect()
             val opts = IO.Options().apply {
                 reconnection = true
-                reconnectionDelay = 3000
-                timeout = 10000
+                reconnectionDelay = 1500
+                reconnectionDelayMax = 5000
+                timeout = 15000
+                transports = arrayOf("websocket", "polling")
             }
             socket = IO.socket(serverUrl, opts)
 
@@ -112,6 +117,7 @@ class CallGatewayService : Service() {
                     put("type", "android_gateway")
                     put("timestamp", System.currentTimeMillis())
                     put("deviceName", Build.MODEL)
+                    put("simSlot", 1)
                 }
                 socket?.emit("register_android_gateway", registerData)
                 socket?.emit("register_gateway", registerData)
@@ -120,7 +126,7 @@ class CallGatewayService : Service() {
             socket?.on(Socket.EVENT_CONNECT_ERROR) { args ->
                 val err = if (args.isNotEmpty()) args[0].toString() else "কানেকশন সমস্যা"
                 log("সার্ভার কানেকশন ত্রুটি: $err ❌")
-                onStatusListener?.invoke(true, "কানেকশন চেষ্টা চলছে (URL চেক করুন) ⚠️")
+                onStatusListener?.invoke(true, "কানেকশন চেষ্টা চলছে... ⚠️")
                 updateNotification("সার্ভার কানেকশন চেষ্টা চলছে...")
             }
 
@@ -132,7 +138,7 @@ class CallGatewayService : Service() {
                     val name = data.optString("name", "সম্মানিত কাস্টমার")
                     val openingSpeech = data.optString("openingSpeech", "আসসালামু আলাইকুম! কেমন আছেন?")
 
-                    log("📞 অটো-কল শুরু হচ্ছে: $name ($phone)")
+                    log("📞 অটো-কল ডায়াল হচ্ছে: $name ($phone)")
                     handleIncomingDialRequest(leadId, phone, name, openingSpeech)
                 }
             }
@@ -151,7 +157,7 @@ class CallGatewayService : Service() {
 
             socket?.on(Socket.EVENT_DISCONNECT) {
                 log("সার্ভার থেকে ডিসকানেক্টেড (পুনরায় চেষ্টা চলছে...)")
-                onStatusListener?.invoke(true, "সার্ভার বিচ্ছিন্ন ⚠️")
+                onStatusListener?.invoke(true, "সার্ভার বিচ্ছিন্ন (পুনরায় চেষ্টা চলছে) ⚠️")
                 updateNotification("সার্ভার থেকে বিচ্ছিন্ন (পুনরায় চেষ্টা চলছে...)")
             }
 
@@ -171,14 +177,23 @@ class CallGatewayService : Service() {
         updateNotification("ডায়াল করা হচ্ছে: $name ($phone)...")
 
         try {
+            audioBridge?.setInitialSpeech(openingSpeech)
+
             val callIntent = Intent(Intent.ACTION_CALL).apply {
                 data = Uri.parse("tel:$phone")
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                // Automatically bypass SIM selector on Dual SIM phones
+                putExtra("com.android.phone.force.slot", true)
+                putExtra("Cdma_Supp", true)
+                putExtra("simSlot", 0) // Primary SIM Slot (SIM 1)
+                putExtra("slot", 0)
+                putExtra("com.android.phone.extra.slot", 0)
+                putExtra("sim_slot", 0)
+                putExtra("subscription", 1)
             }
             startActivity(callIntent)
-            audioBridge?.setInitialSpeech(openingSpeech)
         } catch (e: Exception) {
-            log("কল ডায়াল করতে ত্রুটি (পারমিশন দিন): ${e.message}")
+            log("কল ডায়াল করতে ত্রুটি (Phone Call পারমিশন দিন): ${e.message}")
         }
     }
 
@@ -191,11 +206,10 @@ class CallGatewayService : Service() {
                     when (state) {
                         TelephonyManager.CALL_STATE_OFFHOOK -> {
                             isCallActive = true
-                            log("কল রিসিভ হয়েছে! লাইভ কথোপকথন চলছে...")
+                            log("কল রিসিভ হয়েছে! লাইভ AI কথোপকথন শুরু হচ্ছে... 🎙️")
                             updateNotification("লাইভ AI কথোপকথন চলছে: $currentPhone")
 
                             audioBridge?.startLiveConversation { userSpeech ->
-                                log("👤 কাস্টমার: $userSpeech")
                                 val payload = JSONObject().apply {
                                     put("leadId", currentLeadId)
                                     put("phone", currentPhone)

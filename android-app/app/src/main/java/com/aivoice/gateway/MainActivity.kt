@@ -6,8 +6,11 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
@@ -43,6 +46,7 @@ class MainActivity : AppCompatActivity() {
         etServerUrl.setText(savedUrl)
 
         checkPermissions()
+        requestBatteryOptimizationExemption()
 
         btnToggleService.setOnClickListener {
             val url = etServerUrl.text.toString().trim()
@@ -75,6 +79,20 @@ class MainActivity : AppCompatActivity() {
         CallGatewayService.onStatusListener = { running, text ->
             runOnUiThread {
                 updateUI(running, text)
+            }
+        }
+    }
+
+    private fun requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+            if (powerManager != null && !powerManager.isIgnoringBatteryOptimizations(packageName)) {
+                try {
+                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                    startActivity(intent)
+                } catch (e: Exception) {}
             }
         }
     }

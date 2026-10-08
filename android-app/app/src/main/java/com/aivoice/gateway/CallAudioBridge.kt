@@ -2,6 +2,7 @@ package com.aivoice.gateway
 
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
 import android.media.AudioManager
 import android.os.Bundle
 import android.os.Handler
@@ -10,6 +11,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import java.util.Locale
 
@@ -30,20 +32,70 @@ class CallAudioBridge(private val context: Context) : TextToSpeech.OnInitListene
     }
 
     init {
-        tts = TextToSpeech(context, this)
+        initTtsEngine()
+    }
+
+    private fun initTtsEngine() {
+        try {
+            // Try Google TTS Engine first for superior Bengali voice support
+            tts = TextToSpeech(context, this, "com.google.android.tts")
+        } catch (e: Exception) {
+            tts = TextToSpeech(context, this)
+        }
     }
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            val result = tts?.setLanguage(Locale("bn", "BD"))
-            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                // Fallback to standard Bengali
-                tts?.setLanguage(Locale("bn"))
+            try {
+                val audioAttributes = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .setLegacyStreamType(AudioManager.STREAM_VOICE_CALL)
+                    .build()
+                tts?.setAudioAttributes(audioAttributes)
+            } catch (e: Exception) {
+                Log.w(TAG, "AudioAttributes setup warning: ${e.message}")
             }
+
+            val bnBd = Locale("bn", "BD")
+            val bn = Locale("bn")
+            var langResult = tts?.setLanguage(bnBd)
+            if (langResult == TextToSpeech.LANG_MISSING_DATA || langResult == TextToSpeech.LANG_NOT_SUPPORTED) {
+                langResult = tts?.setLanguage(bn)
+            }
+
+            if (langResult == TextToSpeech.LANG_MISSING_DATA || langResult == TextToSpeech.LANG_NOT_SUPPORTED) {
+                CallGatewayService.log("⚠️ ফোনে বাংলা TTS ভয়েস মিসিং। Google Speech Services প্রয়োজন।")
+            } else {
+                CallGatewayService.log("বাংলা ভয়েস (TTS) ইঞ্জিন প্রস্তুত! 🗣️")
+            }
+
             tts?.setSpeechRate(0.95f)
-            tts?.setPitch(1.05f)
+            tts?.setPitch(1.0f)
             isTtsReady = true
-            Log.d(TAG, "Bengali TTS Engine Ready!")
+
+            tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) {
+                    Log.d(TAG, "TTS Started speaking: $utteranceId")
+                }
+
+                override fun onDone(utteranceId: String?) {
+                    Log.d(TAG, "TTS Finished speaking. Starting listener...")
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        startListening()
+                    }, 400)
+                }
+
+                @Deprecated("Deprecated in Java")
+                override fun onError(utteranceId: String?) {
+                    Log.e(TAG, "TTS Error speaking: $utteranceId")
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        startListening()
+                    }, 500)
+                }
+            })
+        } else {
+            CallGatewayService.log("❌ TTS ইনিশিয়ালাইজেশন ব্যর্থ হয়েছে।")
         }
     }
 
@@ -56,38 +108,52 @@ class CallAudioBridge(private val context: Context) : TextToSpeech.OnInitListene
         this.callStartTime = System.currentTimeMillis()
         transcriptBuilder.clear()
 
-        // Switch call audio mode for bidirectional streaming
         try {
             audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-            audioManager.isSpeakerphoneOn = true // Route call audio smoothly
+            audioManager.isSpeakerphoneOn = true
+            val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
+            audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, maxVol, 0)
         } catch (e: Exception) {
             Log.e(TAG, "Failed setting audio mode: ${e.message}")
         }
 
-        // Delay 1.5 seconds after pickup then speak initial greeting
         Handler(Looper.getMainLooper()).postDelayed({
-            initialSpeech?.let { speech ->
-                speakBengali(speech)
-            }
-        }, 1500)
+            val speech = initialSpeech ?: "আসসালামু আলাইকুম! কেমন আছেন?"
+            speakBengali(speech)
+        }, 1200)
     }
 
     fun speakBengali(text: String) {
-        if (!isTtsReady) {
-            Log.w(TAG, "TTS not ready yet")
+        if (text.isEmpty()) return
+
+        transcriptBuilder.append("AI: ").append(text).append("\n")
+        CallGatewayService.log("🤖 AI বলছে: $text")
+
+        try {
+            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+            audioManager.isSpeakerphoneOn = true
+        } catch (e: Exception) {}
+
+        if (!isTtsReady || tts == null) {
+            initTtsEngine()
+            Handler(Looper.getMainLooper()).postDelayed({
+                val params = Bundle().apply {
+                    putInt(TextToSpeech.Engine.KEY_PARAM_STREAM, AudioManager.STREAM_VOICE_CALL)
+                }
+                tts?.speak(text, TextToSpeech.QUEUE_FLUSH, params, "AI_SPEECH_UTTERANCE")
+            }, 800)
             return
         }
 
-        transcriptBuilder.append("AI: ").append(text).append("\n")
-        Log.d(TAG, "AI Speaking: $text")
+        val params = Bundle().apply {
+            putInt(TextToSpeech.Engine.KEY_PARAM_STREAM, AudioManager.STREAM_VOICE_CALL)
+            putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1.0f)
+        }
 
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "AI_SPEECH_UTTERANCE")
-
-        // Wait until TTS completes speaking, then start listening to customer
-        val estimatedSpeakingMs = (text.length * 80).coerceAtLeast(2000)
-        Handler(Looper.getMainLooper()).postDelayed({
-            startListening()
-        }, estimatedSpeakingMs.toLong())
+        val res = tts?.speak(text, TextToSpeech.QUEUE_FLUSH, params, "AI_SPEECH_UTTERANCE")
+        if (res == TextToSpeech.ERROR) {
+            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "AI_SPEECH_UTTERANCE")
+        }
     }
 
     private fun startListening() {
@@ -109,17 +175,15 @@ class CallAudioBridge(private val context: Context) : TextToSpeech.OnInitListene
                         val text = matches?.firstOrNull() ?: ""
                         if (text.isNotEmpty()) {
                             transcriptBuilder.append("Customer: ").append(text).append("\n")
-                            Log.d(TAG, "Recognized Bengali: $text")
+                            CallGatewayService.log("👤 কাস্টমার: $text")
                             onSpeechResultListener?.invoke(text)
                         } else {
-                            // Retry listening
                             startListening()
                         }
                     }
 
                     override fun onError(error: Int) {
                         Log.d(TAG, "Speech recognition error code: $error")
-                        // Listen again on silence/pause
                         if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
                             Handler(Looper.getMainLooper()).postDelayed({ startListening() }, 500)
                         }
@@ -142,10 +206,12 @@ class CallAudioBridge(private val context: Context) : TextToSpeech.OnInitListene
     }
 
     fun stopLiveConversation() {
-        speechRecognizer?.stopListening()
-        speechRecognizer?.destroy()
-        speechRecognizer = null
-        tts?.stop()
+        try {
+            speechRecognizer?.stopListening()
+            speechRecognizer?.destroy()
+            speechRecognizer = null
+            tts?.stop()
+        } catch (e: Exception) {}
 
         try {
             audioManager.mode = AudioManager.MODE_NORMAL
@@ -164,6 +230,8 @@ class CallAudioBridge(private val context: Context) : TextToSpeech.OnInitListene
 
     fun destroy() {
         stopLiveConversation()
-        tts?.shutdown()
+        try {
+            tts?.shutdown()
+        } catch (e: Exception) {}
     }
 }
