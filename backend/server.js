@@ -267,10 +267,31 @@ app.post('/api/settings', (req, res) => {
   res.json({ success: true, settings: updated });
 });
 
+// Recent Live Stream Activity Buffer (Last 40 events)
+const recentLiveEvents = [];
+function recordLiveEvent(evt) {
+  recentLiveEvents.unshift(evt);
+  if (recentLiveEvents.length > 40) recentLiveEvents.pop();
+}
+
+app.get('/api/conversations', (req, res) => {
+  res.json(db.getAllConversations());
+});
+
+app.get('/api/live-stream', (req, res) => {
+  res.json(recentLiveEvents);
+});
+
 app.get('/api/chat/:phone', (req, res) => {
   const phone = req.params.phone;
+  const lead = db.getLeads().find(l => l.phone === phone || l.realPhone === phone);
   res.json({
-    history: db.getChatHistory(phone),
+    phone,
+    realPhone: lead?.realPhone || null,
+    name: lead?.name || 'সম্মানিত কাস্টমার',
+    temperature: lead?.temperature || 'warm',
+    score: lead?.score || 50,
+    history: db.getChatHistory(phone, lead?.realPhone),
     isAiPaused: db.isAiPausedForUser(phone)
   });
 });
@@ -282,13 +303,36 @@ app.post('/api/chat/send-manual', async (req, res) => {
     return res.status(400).json({ error: 'Phone and message are required' });
   }
 
-  // Set Human Takeover (Pauses AI auto-reply for 30 minutes)
+  // Set Human Takeover (Pauses AI auto-reply for specified minutes, default 30)
   db.setHumanTakeover(phone, pauseMinutes || 30);
   
+  const lead = db.getLeads().find(l => l.phone === phone || l.realPhone === phone);
   const sent = await whatsappService.sendTextMessage(phone, message);
   if (sent) {
-    db.appendChatMessage(phone, 'human_agent', message);
-    io.emit('chat_message', { phone, role: 'human_agent', text: message, name: '👤 আপনি (Human Agent)' });
+    const saved = db.appendChatMessage(phone, 'human_agent', message, lead?.realPhone, { isHuman: true });
+    
+    const msgPayload = {
+      id: saved?.id,
+      phone,
+      role: 'human_agent',
+      text: message,
+      name: '👤 আপনি (Human Agent)',
+      meta: { isHuman: true },
+      timestamp: saved?.timestamp || new Date().toISOString()
+    };
+    
+    io.emit('chat_message', msgPayload);
+    
+    const streamPayload = {
+      type: 'human_reply',
+      phone,
+      name: '👤 আপনি (Human Agent)',
+      text: message,
+      timestamp: new Date().toISOString()
+    };
+    recordLiveEvent(streamPayload);
+    io.emit('live_stream_event', streamPayload);
+    
     res.json({ success: true, message: 'Message sent by human agent & AI paused.' });
   } else {
     res.status(500).json({ error: 'Failed to send message. Is WhatsApp connected?' });
@@ -306,7 +350,9 @@ app.post('/api/chat/toggle-ai-pause', (req, res) => {
     db.resumeAiForUser(phone);
   }
 
-  res.json({ success: true, isAiPaused: db.isAiPausedForUser(phone) });
+  const isPaused = db.isAiPausedForUser(phone);
+  io.emit('chat_ai_pause_update', { phone, isAiPaused: isPaused });
+  res.json({ success: true, isAiPaused: isPaused });
 });
 
 app.post('/api/leads/call', async (req, res) => {

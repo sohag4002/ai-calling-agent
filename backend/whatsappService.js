@@ -595,11 +595,35 @@ class WhatsAppService {
       lead.realPhone = extractedPhone;
     }
 
-    db.appendChatMessage(phoneNumber, 'user', messageText, lead.realPhone);
+    const userMeta = {
+      isVoice: isVoiceNote,
+      hasImage: !!incomingImageBuffer,
+      imageMime: incomingImageMime,
+      rawJid: rawJid
+    };
+
+    const savedUserMsg = db.appendChatMessage(phoneNumber, 'user', messageText, lead.realPhone, userMeta);
 
     if (this.io) {
       this.io.emit('new_lead', lead);
-      this.io.emit('chat_message', { phone: phoneNumber, role: 'user', text: messageText, name: pushName, isVoice: isVoiceNote });
+      this.io.emit('chat_message', {
+        id: savedUserMsg?.id,
+        phone: phoneNumber,
+        role: 'user',
+        text: messageText,
+        name: pushName,
+        meta: userMeta,
+        timestamp: savedUserMsg?.timestamp || new Date().toISOString()
+      });
+      this.io.emit('live_stream_event', {
+        type: 'inbound',
+        phone: phoneNumber,
+        name: pushName,
+        text: messageText,
+        isVoice: isVoiceNote,
+        hasImage: !!incomingImageBuffer,
+        timestamp: new Date().toISOString()
+      });
       this.io.emit('stats_update', db.getStats());
     }
 
@@ -778,10 +802,47 @@ class WhatsAppService {
 
         console.log(`🤖 AI Auto-Replied to ${pushName} (${phoneNumber}): "${replyText}"`);
 
-        db.appendChatMessage(phoneNumber, 'assistant', replyText + (imageToSend ? `\n[📸 ${aiResult.imageCategory} প্যাকেজ ইমেজ পাঠানো হয়েছে]` : ''), lead.realPhone);
+        const aiMeta = {
+          model: aiResult.modelUsed || 'Google Gemini 3.5 Flash',
+          intent: aiResult.intent || 'সাধারণ তথ্য প্রদান',
+          temperature: aiResult.temperature || 'warm',
+          score: aiResult.score || 65,
+          hasImage: !!imageToSend,
+          imageCategory: aiResult.imageCategory || null,
+          imageUrl: imageToSend || null,
+          wantsCall: aiResult.wantsCall || false,
+          isOrderConfirmed: !!aiResult.orderData,
+          isPaymentScreenshot: !!aiResult.isPaymentScreenshot,
+          paymentAmount: aiResult.paymentAmount || null,
+          trxId: aiResult.trxId || null
+        };
+
+        const savedAiMsg = db.appendChatMessage(
+          phoneNumber,
+          'assistant',
+          replyText + (imageToSend ? `\n[📸 ${aiResult.imageCategory} প্যাকেজ ইমেজ পাঠানো হয়েছে]` : ''),
+          lead.realPhone,
+          aiMeta
+        );
 
         if (this.io) {
-          this.io.emit('chat_message', { phone: phoneNumber, role: 'assistant', text: replyText, name: settings.agentName || 'AI', hasImage: !!imageToSend });
+          this.io.emit('chat_message', {
+            id: savedAiMsg?.id,
+            phone: phoneNumber,
+            role: 'assistant',
+            text: replyText,
+            name: settings.agentName || 'সাদিয়া (AI)',
+            meta: aiMeta,
+            timestamp: savedAiMsg?.timestamp || new Date().toISOString()
+          });
+          this.io.emit('live_stream_event', {
+            type: 'ai_reply',
+            phone: phoneNumber,
+            name: settings.agentName || 'সাদিয়া (AI)',
+            text: replyText,
+            meta: aiMeta,
+            timestamp: new Date().toISOString()
+          });
           this.io.emit('stats_update', db.getStats());
         }
       } catch (sendErr) {

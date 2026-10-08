@@ -28,6 +28,10 @@
         <button class="nav-btn active" data-tab="overview">
           <i class="fa-solid fa-chart-pie"></i> ওভারভিউ (Overview)
         </button>
+        <button class="nav-btn" data-tab="inbox">
+          <i class="fa-solid fa-comments"></i> লাইভ ইনবক্স ও চ্যাট (Live Inbox)
+          <span id="inbox-badge-count" class="badge-tag" style="background: rgba(16,185,129,0.2); color: var(--emerald); margin-left: auto;">0</span>
+        </button>
         <button class="nav-btn" data-tab="leads">
           <i class="fa-brands fa-whatsapp"></i> হোয়াটসঅ্যাপ লিডস (Leads)
         </button>
@@ -220,10 +224,41 @@
           </div>
         </div>
 
+        <!-- Live AI & Client Message Stream Bar -->
+        <div class="glass-card mt-6" style="border-left: 4px solid var(--primary); background: linear-gradient(180deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.8));">
+          <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div class="card-title-group">
+              <i class="fa-solid fa-bolt-lightning text-amber text-xl"></i>
+              <div>
+                <h3 style="font-size: 16px;">⚡ লাইভ এআই কথোপকথন ও মেসেজ স্ট্রিম (Real-Time AI & Client Activity Feed)</h3>
+                <p style="font-size: 12px; color: var(--text-secondary); margin: 0;">কোন ক্লায়েন্টের সাথে কি কথা হচ্ছে এবং AI কীভাবে চিন্তা করে উত্তর দিচ্ছে তা সরাসরি দেখুন</p>
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-sm btn-primary" onclick="switchToTab('inbox')">
+                <i class="fa-solid fa-comments"></i> পুরো লাইভ ইনবক্স খুলুন
+              </button>
+            </div>
+          </div>
+          <div class="card-body" style="padding-top: 6px;">
+            <div id="live-activity-stream" class="activity-stream-list" style="display: flex; flex-direction: column; gap: 10px; max-height: 280px; overflow-y: auto;">
+              <!-- Live stream items inserted here -->
+              <div class="stream-empty-box" style="text-align: center; padding: 24px 0; color: var(--text-secondary); font-size: 13px;">
+                <i class="fa-solid fa-satellite-dish fa-spin text-indigo" style="font-size: 24px; margin-bottom: 8px; display: block;"></i>
+                রিয়েল-টাইম মেসেজিং মনিটর সক্রিয়। কোনো ক্লায়েন্ট মেসেজ পাঠালে বা AI রিপ্লাই দিলে তা এখানে সরাসরি ভেসে উঠবে।
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Recent Leads & Live Chat -->
         <div class="glass-card mt-6">
-          <div class="card-header">
-            <h3>সাম্প্রতিক হোয়াটসঅ্যাপ লিডস ও রিয়েল-টাইম স্ট্যাটাস</h3>
+          <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="card-title-group">
+              <i class="fa-solid fa-users text-emerald text-xl"></i>
+              <h3>সাম্প্রতিক হোয়াটসঅ্যাপ লিডস ও রিয়েল-টাইম স্ট্যাটাস</h3>
+            </div>
+            <button class="btn btn-sm btn-outline" onclick="switchToTab('leads')">সকল লিডস দেখুন</button>
           </div>
           <div class="table-responsive">
             <table class="custom-table">
@@ -241,6 +276,114 @@
                 <!-- Injected via JS -->
               </tbody>
             </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB: Live Inbox & Full Chat Workspace -->
+      <section id="tab-inbox" class="tab-pane">
+        <div class="inbox-layout">
+          <!-- Left Sidebar: Conversations List -->
+          <div class="inbox-sidebar-card">
+            <div class="inbox-sidebar-header">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h3 style="font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                  <i class="fa-solid fa-comments text-emerald"></i> চ্যাট ইনবক্স
+                </h3>
+                <span id="inbox-total-count" class="badge badge-success" style="font-size: 11px;">০টি চ্যাট</span>
+              </div>
+
+              <!-- Search -->
+              <div class="search-input-box" style="position: relative; margin-bottom: 12px;">
+                <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); font-size: 13px;"></i>
+                <input type="text" id="inbox-search-input" class="form-control" style="padding-left: 34px; font-size: 13px;" placeholder="নাম বা নম্বর দিয়ে চ্যাট খুঁজুন..." oninput="filterInboxConversations()">
+              </div>
+
+              <!-- Filter Pills -->
+              <div class="inbox-filter-pills" style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px;">
+                <button class="filter-pill active" onclick="setInboxFilter('all', this)">সব</button>
+                <button class="filter-pill" onclick="setInboxFilter('hot', this)">🔥 হট লিড</button>
+                <button class="filter-pill" onclick="setInboxFilter('warm', this)">⚡ ওয়ার্ম</button>
+                <button class="filter-pill" onclick="setInboxFilter('paused', this)">👤 হিউম্যান পজ</button>
+              </div>
+            </div>
+
+            <!-- Conversations List -->
+            <div id="inbox-conversations-list" class="inbox-conversations-scroll">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <!-- Right Pane: Active Chat Conversation & AI Insights -->
+          <div class="inbox-chat-pane">
+            <div id="inbox-empty-view" class="inbox-empty-state">
+              <div class="empty-icon-box">
+                <i class="fa-brands fa-whatsapp text-emerald" style="font-size: 48px;"></i>
+              </div>
+              <h3 style="margin-top: 16px; font-size: 18px;">যেকোনো ক্লায়েন্টের চ্যাট নির্বাচন করুন</h3>
+              <p style="color: var(--text-secondary); font-size: 13px; max-width: 380px; margin: 8px auto;">
+                বাম পাশের তালিকা থেকে যেকোনো কাস্টমার সিলেক্ট করলে তার পুরো চ্যাট হিস্ট্রি, AI কীভাবে চিন্তা করে উত্তর দিচ্ছে এবং লাইভ মেসেজিং দেখতে পাবেন।
+              </p>
+            </div>
+
+            <div id="inbox-active-view" class="inbox-active-workspace hidden">
+              <!-- Header -->
+              <div class="inbox-chat-header">
+                <div class="chat-user-profile">
+                  <div class="user-avatar" id="inbox-active-avatar">ক</div>
+                  <div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <h3 id="inbox-active-name" style="font-size: 15px; font-weight: 700; margin: 0;">-</h3>
+                      <span id="inbox-active-temp-badge"></span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px; margin-top: 3px;">
+                      <span id="inbox-active-phone" style="font-size: 12px; color: var(--text-secondary); font-family: monospace;">-</span>
+                      <button class="btn-text-edit" onclick="promptEditRealPhoneForActiveChat()" title="নম্বর এডিট">
+                        <i class="fa-solid fa-pen" style="font-size: 10px;"></i>
+                      </button>
+                      <span id="inbox-active-ai-indicator" class="ai-status-indicator">
+                        <span class="pulse-dot" style="width: 7px; height: 7px;"></span>
+                        <span>AI সক্রিয়</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="chat-header-actions" style="display: flex; gap: 8px; align-items: center;">
+                  <button id="inbox-btn-toggle-ai" class="btn btn-sm btn-outline" onclick="toggleActiveChatAiPause()">
+                    <i class="fa-solid fa-pause"></i> AI পজ করুন
+                  </button>
+                  <button class="btn btn-sm btn-primary" onclick="triggerCallForActiveChat()">
+                    <i class="fa-solid fa-phone"></i> সরাসরি কল
+                  </button>
+                </div>
+              </div>
+
+              <!-- Messages Body -->
+              <div id="inbox-messages-container" class="inbox-messages-area">
+                <!-- Messages populated via JS -->
+              </div>
+
+              <!-- Quick Action Pills -->
+              <div class="quick-replies-bar">
+                <span style="font-size: 11px; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
+                  <i class="fa-solid fa-wand-magic-sparkles text-amber"></i> কুইক রিপ্লাই:
+                </span>
+                <button class="quick-btn" onclick="insertQuickReply('ল্যান্ডিং পেজ অফার: মাত্র ১,৪৯৯ টাকায় কমপ্লিট ওয়ার্ডপ্রেস ল্যান্ডিং পেজ + ফ্রি ডোমেইন ও ক্লাউড হোস্টিং!')">🚀 ল্যান্ডিং পেজ ১,৪৯৯৳</button>
+                <button class="quick-btn" onclick="insertQuickReply('ই-কমার্স স্টোর অফার: মাত্র ৩,৫০০ টাকায় ফুল-স্ট্যাক Laravel/React ই-কমার্স ওয়েবসাইট + আনলিমিটেড ল্যান্ডিং পেজ!')">🛍️ ই-কমার্স ৩,৫০০৳</button>
+                <button class="quick-btn" onclick="insertQuickReply('ফেসবুক বুস্টিং: ডলার রেট $1 = ১৪৫ টাকা। প্রতিদিন সর্বনিম্ন ২ ডলার থেকে বুস্টিং শুরু করতে পারেন।')">📢 বুস্টিং ১৪৫৳/$</button>
+                <button class="quick-btn" onclick="insertQuickReply('বিকাশ (Send Money): 01953334002 | নগদ: 01518393559। পেমেন্ট সম্পন্ন করে অনুগ্রহ করে ট্রানজেকশন স্ক্রিনশট পাঠিয়ে দিন।')">💳 বিকাশ/নগদ পেমেন্ট</button>
+                <button class="quick-btn" onclick="insertQuickReply('জ্বি ভাই, আমাদের প্রতিনিধি কিছুক্ষণের মধ্যেই আপনাকে ফোনে কল দিয়ে বিস্তারিত জানিয়ে দিচ্ছে।')">📞 কল দেওয়ার আশ্বাস</button>
+              </div>
+
+              <!-- Live Input Box -->
+              <div class="inbox-input-bar">
+                <input type="text" id="inbox-manual-input" class="form-control" placeholder="মানুষ হিসেবে সরাসরি মেসেজ লিখুন (পাঠালে AI স্বয়ংক্রিয়ভাবে পজ হবে)..." onkeypress="handleInboxKeyPress(event)">
+                <button class="btn btn-primary" onclick="sendInboxManualMessage()">
+                  <i class="fa-solid fa-paper-plane"></i> পাঠান
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </section>

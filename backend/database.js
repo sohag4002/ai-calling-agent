@@ -231,30 +231,32 @@ module.exports = {
         unique.push(item);
       }
     }
-    return unique.slice(-30);
+    return unique.slice(-50);
   },
-  appendChatMessage: (phone, role, text, realPhone = null) => {
+  appendChatMessage: (phone, role, text, realPhone = null, meta = {}) => {
     const db = getDb();
     if (!db.chatHistories) db.chatHistories = {};
     if (!db.chatHistories[phone]) db.chatHistories[phone] = [];
     
     const item = {
+      id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
       role, // 'user' | 'assistant' | 'human_agent'
       text,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      meta: meta || {}
     };
 
     db.chatHistories[phone].push(item);
-    if (db.chatHistories[phone].length > 30) {
-      db.chatHistories[phone] = db.chatHistories[phone].slice(-30);
+    if (db.chatHistories[phone].length > 50) {
+      db.chatHistories[phone] = db.chatHistories[phone].slice(-50);
     }
 
     // Sync to realPhone key as well if available
     if (realPhone && realPhone !== phone) {
       if (!db.chatHistories[realPhone]) db.chatHistories[realPhone] = [];
       db.chatHistories[realPhone].push(item);
-      if (db.chatHistories[realPhone].length > 30) {
-        db.chatHistories[realPhone] = db.chatHistories[realPhone].slice(-30);
+      if (db.chatHistories[realPhone].length > 50) {
+        db.chatHistories[realPhone] = db.chatHistories[realPhone].slice(-50);
       }
     }
 
@@ -263,7 +265,45 @@ module.exports = {
     }
 
     saveDb(db);
-    return db.chatHistories[phone];
+    return item;
+  },
+  getAllConversations: () => {
+    const db = getDb();
+    const leads = db.leads || [];
+    const chatHistories = db.chatHistories || {};
+    const takeovers = db.takeovers || {};
+
+    const phoneSet = new Set([
+      ...leads.map(l => l.phone),
+      ...Object.keys(chatHistories).filter(k => k && k !== 'undefined')
+    ]);
+
+    const conversations = [];
+    for (const phone of phoneSet) {
+      const lead = leads.find(l => l.phone === phone || l.realPhone === phone);
+      const history = chatHistories[phone] || (lead?.realPhone ? chatHistories[lead.realPhone] : []) || [];
+      const lastMsg = history[history.length - 1];
+      const isAiPaused = takeovers[phone] && Date.now() < takeovers[phone].pausedUntil;
+
+      conversations.push({
+        phone: phone,
+        realPhone: lead?.realPhone || (phone.includes('@lid') ? null : phone),
+        name: lead?.name || 'সম্মানিত কাস্টমার',
+        temperature: lead?.temperature || 'warm',
+        score: lead?.score || 50,
+        status: lead?.status || 'active',
+        customerType: lead?.customerType || 'new_lead',
+        isAiPaused: !!isAiPaused,
+        lastMessage: lastMsg?.text || lead?.lastMessage || '',
+        lastMessageTime: lastMsg?.timestamp || lead?.updatedAt || lead?.createdAt || new Date().toISOString(),
+        lastMessageRole: lastMsg?.role || 'user',
+        messageCount: history.length || lead?.messageCount || 1,
+        meta: lastMsg?.meta || {}
+      });
+    }
+
+    // Sort by latest message time
+    return conversations.sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
   },
   // Human Takeover state
   isAiPausedForUser: (phone) => {

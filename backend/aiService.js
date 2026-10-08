@@ -243,6 +243,7 @@ Output MUST be a single valid JSON object strictly matching this schema:
     }
 
     let parsedResult = null;
+    let modelUsed = 'Google Gemini 3.5 Flash';
     const geminiKey = settings.geminiApiKey || process.env.GEMINI_API_KEY;
 
     // 1. Primary AI Engine: Google Gemini (Superior Multimodal Reasoning)
@@ -260,6 +261,7 @@ Output MUST be a single valid JSON object strictly matching this schema:
         if (jsonStr) {
           const clean = jsonStr.replace(/```json|```/g, '').trim();
           parsedResult = JSON.parse(clean);
+          modelUsed = 'Google Gemini 3.5 Flash';
         }
       } catch (geminiErr) {
         console.warn('Gemini Generation Warning, falling back to Groq AI:', geminiErr.message);
@@ -290,7 +292,10 @@ Output MUST be a single valid JSON object strictly matching this schema:
           const raw = chatCompletion.choices[0]?.message?.content?.trim();
           if (raw) {
             parsedResult = JSON.parse(raw);
-            if (parsedResult.replyText || parsedResult.reply) break;
+            if (parsedResult.replyText || parsedResult.reply) {
+              modelUsed = `Groq (${model.split('/').pop()})`;
+              break;
+            }
           }
         } catch (err) {
           console.warn(`Groq Model (${model}) Error:`, err.message);
@@ -306,6 +311,29 @@ Output MUST be a single valid JSON object strictly matching this schema:
     let score = parsedResult?.score || 65;
     let orderData = null;
 
+    // Detect specific intent description in Bengali
+    let intent = 'সাধারণ তথ্য ও শুভেচ্ছা বার্তা';
+    const lower = userMessage.toLowerCase();
+    if (parsedResult?.isPaymentScreenshot) {
+      intent = `পেমেন্ট স্ক্রিনশট ও বিকাশ/নগদ ভেরিফিকেশন (৳${parsedResult.paymentAmount || 'N/A'})`;
+    } else if (parsedResult?.isOrderConfirmed) {
+      intent = `অর্ডার কনফার্মেশন ও ডাটা কালেকশন (${parsedResult.packageItem || 'সার্ভিস'})`;
+    } else if (imageCategory === 'hosting') {
+      intent = 'হোস্টিং প্যাকেজ ও সিপ্যানেল তথ্য বিশ্লেষণ';
+    } else if (imageCategory === 'website') {
+      intent = 'ওয়েবসাইট ও ল্যান্ডিং পেজ প্যাকেজ অফার';
+    } else if (lower.includes('landing') || lower.includes('ল্যান্ডিং')) {
+      intent = 'ওয়ার্ডপ্রেস ল্যান্ডিং পেজ (১,৪৯৯৳) সংক্রান্ত আলোচনা';
+    } else if (lower.includes('ecommerce') || lower.includes('কমার্স') || lower.includes('দোকান')) {
+      intent = 'কমপ্লিট ই-কমার্স ওয়েবসাইট (৩,৫০০৳) প্যাকেজ';
+    } else if (lower.includes('boost') || lower.includes('বুস্টিং') || lower.includes('বিজ্ঞাপন') || lower.includes('dollar')) {
+      intent = 'ফেসবুক পেজ বুস্টিং ও ডলার রেট ($1 = ১৪৫৳)';
+    } else if (lower.includes('bKash') || lower.includes('বিকাশ') || lower.includes('নগদ') || lower.includes('টাকা') || lower.includes('পেমেন্ট')) {
+      intent = 'পেমেন্ট মেথড ও অ্যাকাউন্ট সংক্রান্ত তথ্য';
+    } else if (parsedResult?.isSupportIssue) {
+      intent = 'কাস্টমার সাপোর্ট ও ইস্যু সমাধান';
+    }
+
     if (parsedResult?.isOrderConfirmed) {
       orderData = {
         name: parsedResult.customerName || lead.name || customerDisplayName,
@@ -320,9 +348,9 @@ Output MUST be a single valid JSON object strictly matching this schema:
     }
 
     // Check if user specifically requested a phone call
-    const lower = userMessage.toLowerCase();
     if (!wantsCall && ['কল দেন', 'কল দিন', 'কথা বলতে চাই', 'ফোন দেন', 'ফোন দিন', 'কল করুন', 'call me', 'call den'].some(k => lower.includes(k))) {
       wantsCall = true;
+      intent = 'সরাসরি ভয়েস কলের অনুরোধ';
     }
 
     // Humanized Fallback (Zero robotic responses)
@@ -339,6 +367,8 @@ Output MUST be a single valid JSON object strictly matching this schema:
     return {
       replyText: replyText.trim(),
       imageCategory: (imageCategory === 'hosting' || imageCategory === 'website') ? imageCategory : null,
+      modelUsed,
+      intent,
       wantsCall,
       temperature,
       score,
