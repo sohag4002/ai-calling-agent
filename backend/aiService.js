@@ -78,9 +78,9 @@ class AIService {
     });
 
     const modelsToTry = [
-      'gemini-3.5-flash-lite',
-      'gemini-flash-lite-latest',
-      'gemini-flash-latest'
+      'gemini-3.8-flash',
+      'gemini-3.5-flash',
+      'gemini-2.5-flash-lite'
     ];
 
     for (const model of modelsToTry) {
@@ -95,7 +95,7 @@ class AIService {
             responseMimeType: isJson ? 'application/json' : undefined
           }
         };
-        const res = await axios.post(url, payload, { timeout: 15000 });
+        const res = await axios.post(url, payload, { timeout: 2000 });
         const text = res.data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
         if (text) return text;
       } catch (err) {
@@ -243,33 +243,11 @@ Output MUST be a single valid JSON object strictly matching this schema:
     }
 
     let parsedResult = null;
-    let modelUsed = 'Google Gemini 3.5 Flash';
+    let modelUsed = 'Groq LLM (gpt-oss-120b)';
     const geminiKey = settings.geminiApiKey || process.env.GEMINI_API_KEY;
 
-    // 1. Primary AI Engine: Google Gemini (Superior Multimodal Reasoning)
-    if (geminiKey) {
-      try {
-        const jsonStr = await this.callGemini(
-          geminiKey,
-          strictSystemInstruction,
-          formattedHistory,
-          `কাস্টমারের বর্তমান মেসেজ: "${userMessage}"${imageBuffer ? ' (কাস্টমার একটি ছবি/স্ক্রিনশট পাঠিয়েছেন, এটি বিশ্লেষণ করো)' : ''}\nবিগত চ্যাট হিস্ট্রি এবং সোহাগ অনলাইনের তথ্যের আলোকে একজন বিচক্ষণ মানুষের মতো সঠিক JSON রেসপন্স দাও।`,
-          true,
-          imageBuffer,
-          imageMime
-        );
-        if (jsonStr) {
-          const clean = jsonStr.replace(/```json|```/g, '').trim();
-          parsedResult = JSON.parse(clean);
-          modelUsed = 'Google Gemini 3.5 Flash';
-        }
-      } catch (geminiErr) {
-        console.warn('Gemini Generation Warning, falling back to Groq AI:', geminiErr.message);
-      }
-    }
-
-    // 2. Secondary AI Engine: Groq LLM (High-Speed Backup)
-    if (!parsedResult && !imageBuffer && this.groq) {
+    // 1. Text Chat: Try Ultra-fast Groq First (< 600ms latency)
+    if (!imageBuffer && this.groq) {
       const groqHistory = formattedHistory.map(h => ({
         role: h.role === 'model' ? 'assistant' : 'user',
         content: h.parts?.[0]?.text || h.content || ''
@@ -300,6 +278,28 @@ Output MUST be a single valid JSON object strictly matching this schema:
         } catch (err) {
           console.warn(`Groq Model (${model}) Error:`, err.message);
         }
+      }
+    }
+
+    // 2. Multimodal (Image/Screenshot) or Fallback: Google Gemini
+    if (!parsedResult && geminiKey) {
+      try {
+        const jsonStr = await this.callGemini(
+          geminiKey,
+          strictSystemInstruction,
+          formattedHistory,
+          `কাস্টমারের বর্তমান মেসেজ: "${userMessage}"${imageBuffer ? ' (কাস্টমার একটি ছবি/স্ক্রিনশট পাঠিয়েছেন, এটি বিশ্লেষণ করো)' : ''}\nবিগত চ্যাট হিস্ট্রি এবং সোহাগ অনলাইনের তথ্যের আলোকে একজন বিচক্ষণ মানুষের মতো সঠিক JSON রেসপন্স দাও।`,
+          true,
+          imageBuffer,
+          imageMime
+        );
+        if (jsonStr) {
+          const clean = jsonStr.replace(/```json|```/g, '').trim();
+          parsedResult = JSON.parse(clean);
+          modelUsed = 'Google Gemini 3.5 Flash';
+        }
+      } catch (geminiErr) {
+        console.warn('Gemini Generation Warning:', geminiErr.message);
       }
     }
 
