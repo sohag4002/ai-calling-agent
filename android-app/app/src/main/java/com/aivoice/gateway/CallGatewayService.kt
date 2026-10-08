@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.net.Uri
 import android.os.Build
 import android.os.IBinder
@@ -22,14 +23,22 @@ class CallGatewayService : Service() {
 
     companion object {
         var isRunning = false
+        var onLogListener: ((String) -> Unit)? = null
+        var onStatusListener: ((Boolean, String) -> Unit)? = null
         private const val CHANNEL_ID = "ai_call_gateway_channel"
         private const val NOTIFICATION_ID = 1001
         private const val TAG = "CallGatewayService"
+
+        fun log(msg: String) {
+            Log.d(TAG, msg)
+            onLogListener?.invoke(msg)
+        }
     }
 
     private var socket: Socket? = null
     private var wakeLock: PowerManager.WakeLock? = null
-    private lateinit var telephonyManager: TelephonyManager
+    private var telephonyManager: TelephonyManager? = null
+    private var phoneStateListener: PhoneStateListener? = null
     private var audioBridge: CallAudioBridge? = null
 
     private var currentLeadId: String? = null
@@ -40,21 +49,46 @@ class CallGatewayService : Service() {
     override fun onCreate() {
         super.onCreate()
         isRunning = true
-        createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildNotification("AI Call Gateway সার্ভার কানেক্ট হচ্ছে..."))
+        onStatusListener?.invoke(true, "গেটওয়ে সার্ভিস শুরু হচ্ছে...")
 
-        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AIGateway::WakeLock").apply {
-            acquire()
+        try {
+            createNotificationChannel()
+            val notification = buildNotification("AI Call Gateway ব্যাকগ্রাউন্ডে চলছে...")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "startForeground error: ${e.message}")
         }
 
-        telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
-        setupPhoneStateListener()
-        audioBridge = CallAudioBridge(this)
+        try {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+            wakeLock = powerManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AIGateway::WakeLock")?.apply {
+                acquire(24 * 60 * 60 * 1000L) // 24 hours
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "WakeLock error: ${e.message}")
+        }
+
+        try {
+            telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+            setupPhoneStateListener()
+        } catch (e: Exception) {
+            Log.e(TAG, "Telephony setup error: ${e.message}")
+        }
+
+        try {
+            audioBridge = CallAudioBridge(this)
+        } catch (e: Exception) {
+            Log.e(TAG, "Audio bridge setup error: ${e.message}")
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val serverUrl = intent?.getStringExtra("SERVER_URL") ?: "https://your-domain.com"
+        log("সার্ভার কানেক্ট হচ্ছে: $serverUrl")
         connectSocket(serverUrl)
         return START_STICKY
     }
@@ -64,29 +98,40 @@ class CallGatewayService : Service() {
             socket?.disconnect()
             val opts = IO.Options().apply {
                 reconnection = true
-                reconnectionDelay = 2000
+                reconnectionDelay = 3000
+                timeout = 10000
             }
             socket = IO.socket(serverUrl, opts)
 
             socket?.on(Socket.EVENT_CONNECT) {
-                Log.d(TAG, "Connected to AI Voice Server!")
-                updateNotification("সার্ভারের সাথে কানেক্টেড ✅")
+                log("সার্ভারের সাথে সফলভাবে কানেক্টেড! ✅")
+                onStatusListener?.invoke(true, "সক্রিয় ও কানেক্টেড ✅")
+                updateNotification("সার্ভারের সাথে সক্রিয় ও কানেক্টেড ✅")
 
-                val deviceInfo = JSONObject().apply {
-                    put("deviceName", "${Build.MANUFACTURER} ${Build.MODEL}")
-                    put("simSlot", 1)
+                val registerData = JSONObject().apply {
+                    put("type", "android_gateway")
+                    put("timestamp", System.currentTimeMillis())
+                    put("deviceName", Build.MODEL)
                 }
-                socket?.emit("register_gateway", deviceInfo)
+                socket?.emit("register_android_gateway", registerData)
             }
 
-            socket?.on("dial_call") { args ->
+            socket?.on(Socket.EVENT_CONNECT_ERROR) { args ->
+                val err = if (args.isNotEmpty()) args[0].toString() else "কানেকশন সমস্যা"
+                log("সার্ভার কানেকশন ত্রুটি: $err ❌")
+                onStatusListener?.invoke(true, "কানেকশন চেষ্টা চলছে (URL চেক করুন) ⚠️")
+                updateNotification("সার্ভার কানেকশন চেষ্টা চলছে...")
+            }
+
+            socket?.on("dial_lead") { args ->
                 if (args.isNotEmpty() && args[0] is JSONObject) {
                     val data = args[0] as JSONObject
-                    val phone = data.getString("phone")
+                    val leadId = data.optString("leadId")
+                    val phone = data.optString("phone")
                     val name = data.optString("name", "সম্মানিত কাস্টমার")
-                    val leadId = data.getString("leadId")
-                    val openingSpeech = data.optString("openingSpeech", "আসসালামু আলাইকুম!")
+                    val openingSpeech = data.optString("openingSpeech", "আসসালামু আলাইকুম! কেমন আছেন?")
 
+                    log("📞 অটো-কল শুরু হচ্ছে: $name ($phone)")
                     handleIncomingDialRequest(leadId, phone, name, openingSpeech)
                 }
             }
@@ -94,18 +139,21 @@ class CallGatewayService : Service() {
             socket?.on("ai_speech_reply") { args ->
                 if (args.isNotEmpty() && args[0] is JSONObject) {
                     val data = args[0] as JSONObject
-                    val replyText = data.getString("replyText")
+                    val replyText = data.optString("replyText")
+                    log("🤖 AI উত্তর: $replyText")
                     audioBridge?.speakBengali(replyText)
                 }
             }
 
             socket?.on(Socket.EVENT_DISCONNECT) {
-                Log.w(TAG, "Disconnected from AI Voice Server")
+                log("সার্ভার থেকে ডিসকানেক্টেড (পুনরায় চেষ্টা চলছে...)")
+                onStatusListener?.invoke(true, "সার্ভার বিচ্ছিন্ন ⚠️")
                 updateNotification("সার্ভার থেকে বিচ্ছিন্ন (পুনরায় চেষ্টা চলছে...)")
             }
 
             socket?.connect()
         } catch (e: Exception) {
+            log("সকেট ইনিশিয়ালাইজেশন ত্রুটি: ${e.message}")
             Log.e(TAG, "Socket init failed: ${e.message}")
         }
     }
@@ -118,59 +166,65 @@ class CallGatewayService : Service() {
         Log.d(TAG, "Initiating Call to $phone ($name)")
         updateNotification("ডায়াল করা হচ্ছে: $name ($phone)...")
 
-        val callIntent = Intent(Intent.ACTION_CALL).apply {
-            data = Uri.parse("tel:$phone")
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        try {
+            val callIntent = Intent(Intent.ACTION_CALL).apply {
+                data = Uri.parse("tel:$phone")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            startActivity(callIntent)
+            audioBridge?.setInitialSpeech(openingSpeech)
+        } catch (e: Exception) {
+            log("কল ডায়াল করতে ত্রুটি (পারমিশন দিন): ${e.message}")
         }
-        startActivity(callIntent)
-
-        // Ready the audio bridge with initial opening speech once call connects
-        audioBridge?.setInitialSpeech(openingSpeech)
     }
 
+    @Suppress("DEPRECATION")
     private fun setupPhoneStateListener() {
-        val listener = object : PhoneStateListener() {
-            override fun onCallStateChanged(state: Int, phoneNumber: String?) {
-                super.onCallStateChanged(state, phoneNumber)
-                when (state) {
-                    TelephonyManager.CALL_STATE_OFFHOOK -> {
-                        // Call answered / in progress
-                        isCallActive = true
-                        Log.d(TAG, "Call OFFHOOK - Customer Picked Up!")
-                        updateNotification("লাইভ AI কথোপকথন চলছে: $currentPhone")
-                        
-                        audioBridge?.startLiveConversation { userSpeech ->
-                            val payload = JSONObject().apply {
-                                put("leadId", currentLeadId)
-                                put("phone", currentPhone)
-                                put("userSpeech", userSpeech)
-                            }
-                            socket?.emit("process_speech", payload)
-                        }
-                    }
-                    TelephonyManager.CALL_STATE_IDLE -> {
-                        if (isCallActive) {
-                            isCallActive = false
-                            Log.d(TAG, "Call Ended.")
-                            audioBridge?.stopLiveConversation()
+        try {
+            phoneStateListener = object : PhoneStateListener() {
+                override fun onCallStateChanged(state: Int, phoneNumber: String?) {
+                    super.onCallStateChanged(state, phoneNumber)
+                    when (state) {
+                        TelephonyManager.CALL_STATE_OFFHOOK -> {
+                            isCallActive = true
+                            log("কল রিসিভ হয়েছে! লাইভ কথোপকথন চলছে...")
+                            updateNotification("লাইভ AI কথোপকথন চলছে: $currentPhone")
 
-                            // Report call results
-                            val result = JSONObject().apply {
-                                put("leadId", currentLeadId)
-                                put("phone", currentPhone)
-                                put("leadName", currentName)
-                                put("outcome", "completed")
-                                put("durationSeconds", audioBridge?.getCallDurationSeconds() ?: 0)
-                                put("transcript", audioBridge?.getFullTranscript() ?: "")
+                            audioBridge?.startLiveConversation { userSpeech ->
+                                log("👤 কাস্টমার: $userSpeech")
+                                val payload = JSONObject().apply {
+                                    put("leadId", currentLeadId)
+                                    put("phone", currentPhone)
+                                    put("userSpeech", userSpeech)
+                                }
+                                socket?.emit("process_speech", payload)
                             }
-                            socket?.emit("call_finished", result)
-                            updateNotification("সার্ভারের সাথে কানেক্টেড ✅")
+                        }
+                        TelephonyManager.CALL_STATE_IDLE -> {
+                            if (isCallActive) {
+                                isCallActive = false
+                                log("কল সম্পন্ন হয়েছে। সামারি পাঠানো হচ্ছে...")
+                                audioBridge?.stopLiveConversation()
+
+                                val result = JSONObject().apply {
+                                    put("leadId", currentLeadId)
+                                    put("phone", currentPhone)
+                                    put("leadName", currentName)
+                                    put("outcome", "completed")
+                                    put("durationSeconds", audioBridge?.getCallDurationSeconds() ?: 0)
+                                    put("transcript", audioBridge?.getFullTranscript() ?: "")
+                                }
+                                socket?.emit("call_finished", result)
+                                updateNotification("সার্ভারের সাথে সক্রিয় ও কানেক্টেড ✅")
+                            }
                         }
                     }
                 }
             }
+            telephonyManager?.listen(phoneStateListener, PhoneStateListener.LISTEN_CALL_STATE)
+        } catch (e: Exception) {
+            Log.e(TAG, "Phone state listener error: ${e.message}")
         }
-        telephonyManager.listen(listener, PhoneStateListener.LISTEN_CALL_STATE)
     }
 
     private fun createNotificationChannel() {
@@ -181,7 +235,7 @@ class CallGatewayService : Service() {
                 NotificationManager.IMPORTANCE_LOW
             )
             val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(channel)
+            manager?.createNotificationChannel(channel)
         }
     }
 
@@ -191,19 +245,35 @@ class CallGatewayService : Service() {
             .setContentText(text)
             .setSmallIcon(android.R.drawable.stat_sys_phone_call)
             .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
 
     private fun updateNotification(text: String) {
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(NOTIFICATION_ID, buildNotification(text))
+        try {
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            manager?.notify(NOTIFICATION_ID, buildNotification(text))
+        } catch (e: Exception) {
+            Log.e(TAG, "Notification update error: ${e.message}")
+        }
     }
 
+    @Suppress("DEPRECATION")
     override fun onDestroy() {
         isRunning = false
-        wakeLock?.release()
-        socket?.disconnect()
-        audioBridge?.destroy()
+        onStatusListener?.invoke(false, "স্ট্যাটাস: বন্ধ ❌")
+        try {
+            wakeLock?.release()
+        } catch (e: Exception) {}
+        try {
+            socket?.disconnect()
+        } catch (e: Exception) {}
+        try {
+            audioBridge?.destroy()
+        } catch (e: Exception) {}
+        try {
+            phoneStateListener?.let { telephonyManager?.listen(it, PhoneStateListener.LISTEN_NONE) }
+        } catch (e: Exception) {}
         super.onDestroy()
     }
 

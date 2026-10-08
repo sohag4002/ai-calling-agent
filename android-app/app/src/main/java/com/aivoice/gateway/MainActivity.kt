@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.widget.Button
@@ -38,7 +39,8 @@ class MainActivity : AppCompatActivity() {
         tvStatus = findViewById(R.id.tvStatus)
         tvLogs = findViewById(R.id.tvLogs)
 
-        etServerUrl.setText(prefs.getString("server_url", "https://your-domain.com"))
+        val savedUrl = prefs.getString("server_url", "http://192.168.1.225:5050")
+        etServerUrl.setText(savedUrl)
 
         checkPermissions()
 
@@ -58,7 +60,23 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        setupServiceCallbacks()
         updateUI()
+    }
+
+    private fun setupServiceCallbacks() {
+        CallGatewayService.onLogListener = { msg ->
+            runOnUiThread {
+                val current = tvLogs.text.toString()
+                tvLogs.text = "$msg\n$current"
+            }
+        }
+
+        CallGatewayService.onStatusListener = { running, text ->
+            runOnUiThread {
+                updateUI(running, text)
+            }
+        }
     }
 
     private fun checkPermissions() {
@@ -83,39 +101,49 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startGatewayService(url: String) {
-        val intent = Intent(this, CallGatewayService::class.java).apply {
-            putExtra("SERVER_URL", url)
+        try {
+            val intent = Intent(this, CallGatewayService::class.java).apply {
+                putExtra("SERVER_URL", url)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+            updateUI(true, "গেটওয়ে চালু হচ্ছে...")
+        } catch (e: Exception) {
+            Toast.makeText(this, "সার্ভিস চালু করা যায়নি: ${e.message}", Toast.LENGTH_LONG).show()
+            tvLogs.text = "ত্রুটি: ${e.message}\n" + tvLogs.text
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
-        }
-        updateUI()
     }
 
     private fun stopGatewayService() {
-        val intent = Intent(this, CallGatewayService::class.java)
-        stopService(intent)
-        updateUI()
+        try {
+            val intent = Intent(this, CallGatewayService::class.java)
+            stopService(intent)
+            updateUI(false, "স্ট্যাটাস: বন্ধ ❌")
+        } catch (e: Exception) {
+            Toast.makeText(this, "সার্ভিস বন্ধ করা যায়নি: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 
-    private fun updateUI() {
-        if (CallGatewayService.isRunning) {
-            tvStatus.text = "স্ট্যাটাস: সক্রিয় ও কানেক্টেড ✅"
-            tvStatus.setTextColor(getColor(android.R.color.holo_green_dark))
+    private fun updateUI(isRunning: Boolean = CallGatewayService.isRunning, statusText: String? = null) {
+        if (isRunning) {
+            tvStatus.text = statusText ?: "স্ট্যাটাস: সক্রিয় ও কানেক্টেড ✅"
+            tvStatus.setTextColor(Color.parseColor("#10B981"))
             btnToggleService.text = "গেটওয়ে বন্ধ করুন"
-            btnToggleService.setBackgroundColor(getColor(android.R.color.holo_red_dark))
+            btnToggleService.setBackgroundColor(Color.parseColor("#EF4444"))
         } else {
-            tvStatus.text = "স্ট্যাটাস: বন্ধ ❌"
-            tvStatus.setTextColor(getColor(android.R.color.holo_red_dark))
+            tvStatus.text = statusText ?: "স্ট্যাটাস: বন্ধ ❌"
+            tvStatus.setTextColor(Color.parseColor("#F43F5E"))
             btnToggleService.text = "গেটওয়ে চালু করুন"
-            btnToggleService.setBackgroundColor(getColor(android.R.color.holo_blue_dark))
+            btnToggleService.setBackgroundColor(Color.parseColor("#4F46E5"))
         }
     }
 
     override fun onResume() {
         super.onResume()
+        setupServiceCallbacks()
         updateUI()
     }
 }
