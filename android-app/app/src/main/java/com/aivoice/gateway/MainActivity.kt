@@ -120,6 +120,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun startGatewayService(url: String) {
         try {
+            CallGatewayService.isExplicitlyStopped = false
+            prefs.edit().putString("server_url", url).putBoolean("service_enabled", true).apply()
+
             val intent = Intent(this, CallGatewayService::class.java).apply {
                 putExtra("SERVER_URL", url)
             }
@@ -137,6 +140,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun stopGatewayService() {
         try {
+            CallGatewayService.isExplicitlyStopped = true
+            prefs.edit().putBoolean("service_enabled", false).apply()
+
             val intent = Intent(this, CallGatewayService::class.java)
             stopService(intent)
             updateUI(false, "স্ট্যাটাস: বন্ধ ❌")
